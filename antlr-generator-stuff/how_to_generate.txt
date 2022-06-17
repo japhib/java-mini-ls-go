@@ -1,0 +1,1 @@
+java -jar ~/projects/antlr-4.10.1-complete.jar -Dlanguage=Go -o ../parser JavaParser.g4 JavaLexer.g4
