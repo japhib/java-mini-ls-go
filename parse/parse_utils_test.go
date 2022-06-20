@@ -1,19 +1,20 @@
-package parse_utils
+package parse
 
 import (
+	"java-mini-ls-go/javaparser"
+	"testing"
+
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"github.com/stretchr/testify/assert"
-	"java-mini-ls-go/parser"
-	"testing"
 )
 
 type listener1 struct {
-	*parser.BaseJavaParserListener
+	*javaparser.BaseJavaParserListener
 	nameOfClass string
 }
 
-func (l *listener1) EnterClassDeclaration(ctx *parser.ClassDeclarationContext) {
-	l.nameOfClass = ctx.Identifier().(antlr.ParseTree).GetText()
+func (l *listener1) EnterClassDeclaration(ctx *javaparser.ClassDeclarationContext) {
+	l.nameOfClass = ctx.Identifier().GetText()
 }
 
 func TestBasicParsing(t *testing.T) {
@@ -32,11 +33,11 @@ func TestLex(t *testing.T) {
 	tokens := Lex("class MyClass{}")
 
 	expected := []expectedToken{
-		{parser.JavaLexerCLASS, "class"},
-		{parser.JavaLexerWS, " "},
-		{parser.JavaLexerIDENTIFIER, "MyClass"},
-		{parser.JavaLexerLBRACE, "{"},
-		{parser.JavaLexerRBRACE, "}"},
+		{javaparser.JavaLexerCLASS, "class"},
+		{javaparser.JavaLexerWS, " "},
+		{javaparser.JavaLexerIDENTIFIER, "MyClass"},
+		{javaparser.JavaLexerLBRACE, "{"},
+		{javaparser.JavaLexerRBRACE, "}"},
 		{antlr.TokenEOF, "<EOF>"},
 	}
 

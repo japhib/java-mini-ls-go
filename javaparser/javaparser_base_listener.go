@@ -1,6 +1,6 @@
 // Code generated from JavaParser.g4 by ANTLR 4.10.1. DO NOT EDIT.
 
-package parser // JavaParser
+package javaparser // JavaParser
 
 import "github.com/antlr/antlr4/runtime/Go/antlr"
 

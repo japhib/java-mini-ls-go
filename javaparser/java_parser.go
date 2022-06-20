@@ -1,6 +1,6 @@
 // Code generated from JavaParser.g4 by ANTLR 4.10.1. DO NOT EDIT.
 
-package parser // JavaParser
+package javaparser // JavaParser
 
 import (
 	"fmt"
@@ -987,7 +987,7 @@ func javaparserParserInit() {
 }
 
 // JavaParserInit initializes any static state used to implement JavaParser. By default the
-// static state used to implement the parser is lazily initialized during the first call to
+// static state used to implement the javaparser is lazily initialized during the first call to
 // NewJavaParser(). You can call this function if you wish to initialize the static state ahead
 // of time.
 func JavaParserInit() {
@@ -995,7 +995,7 @@ func JavaParserInit() {
 	staticData.once.Do(javaparserParserInit)
 }
 
-// NewJavaParser produces a new parser instance for the optional input antlr.TokenStream.
+// NewJavaParser produces a new javaparser instance for the optional input antlr.TokenStream.
 func NewJavaParser(input antlr.TokenStream) *JavaParser {
 	JavaParserInit()
 	this := new(JavaParser)

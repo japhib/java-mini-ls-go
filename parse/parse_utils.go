@@ -1,13 +1,14 @@
-package parse_utils
+package parse
 
 import (
+	"java-mini-ls-go/javaparser"
+
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"java-mini-ls-go/parser"
 )
 
 func Lex(input string) []antlr.Token {
 	is := antlr.NewInputStream(input)
-	lexer := parser.NewJavaLexer(is)
+	lexer := javaparser.NewJavaLexer(is)
 
 	// read all tokens
 	tokens := make([]antlr.Token, 0)
@@ -23,13 +24,13 @@ func Lex(input string) []antlr.Token {
 	return tokens
 }
 
-func Parse(input string) *parser.CompilationUnitContext {
+func Parse(input string) *javaparser.CompilationUnitContext {
 	is := antlr.NewInputStream(input)
-	lexer := parser.NewJavaLexer(is)
+	lexer := javaparser.NewJavaLexer(is)
 	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 
-	p := parser.NewJavaParser(stream)
+	p := javaparser.NewJavaParser(stream)
 	p.AddErrorListener(antlr.NewDiagnosticErrorListener(true))
 	p.BuildParseTrees = true
-	return p.CompilationUnit().(*parser.CompilationUnitContext)
+	return p.CompilationUnit().(*javaparser.CompilationUnitContext)
 }
