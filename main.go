@@ -90,11 +90,9 @@ func runServerConnect(ctx context.Context, logger *zap.Logger, addr string) erro
 
 	ctx, _, _ = server.RunServer(ctx, logger, jsonrpc2.NewStream(conn))
 
-	// Wait and let the server do its magic through the connection
-	select {
-	case <-ctx.Done():
-		logger.Info("Connection closed, server shutting down.")
-	}
+	// Wait for server to be done
+	<-ctx.Done()
 
+	logger.Info("Connection closed, server shutting down.")
 	return nil
 }

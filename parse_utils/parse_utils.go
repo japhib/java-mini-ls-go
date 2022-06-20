@@ -1,7 +1,6 @@
 package parse_utils
 
 import (
-	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"java-mini-ls-go/parser"
 )
@@ -19,22 +18,12 @@ func Lex(input string) []antlr.Token {
 		if t.GetTokenType() == antlr.TokenEOF {
 			break
 		}
-		fmt.Printf("%s (%q)\n", lexer.SymbolicNames[t.GetTokenType()], t.GetText())
 	}
 
 	return tokens
 }
 
-type javaListener struct {
-	*parser.BaseJavaParserListener
-}
-
-func (jl *javaListener) EnterClassDeclaration(ctx *parser.ClassDeclarationContext) {
-	nameOfClass := ctx.Identifier().(antlr.ParseTree).GetText()
-	fmt.Println("name of class ", nameOfClass)
-}
-
-func Parse(input string) {
+func Parse(input string) *parser.CompilationUnitContext {
 	is := antlr.NewInputStream(input)
 	lexer := parser.NewJavaLexer(is)
 	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
@@ -42,7 +31,5 @@ func Parse(input string) {
 	p := parser.NewJavaParser(stream)
 	p.AddErrorListener(antlr.NewDiagnosticErrorListener(true))
 	p.BuildParseTrees = true
-	tree := p.CompilationUnit()
-	//tree.ToStringTree()
-	antlr.ParseTreeWalkerDefault.Walk(&javaListener{}, tree)
+	return p.CompilationUnit().(*parser.CompilationUnitContext)
 }
