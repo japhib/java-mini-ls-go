@@ -18,7 +18,6 @@ export async function activate(context: ExtensionContext) {
     options: {
       env: {
         ...process.env,
-        // eslint-disable-next-line @typescript-eslint/naming-convention
       },
     },
     transport: {
