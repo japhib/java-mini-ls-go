@@ -2,3 +2,4 @@
 java-mini-ls-go
 node_modules/
 out/
+.antlr/
