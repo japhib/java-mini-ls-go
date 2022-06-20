@@ -6,16 +6,26 @@ import (
 	"github.com/pkg/errors"
 	"go.lsp.dev/jsonrpc2"
 	"go.uber.org/zap"
+	"gopkg.in/alecthomas/kingpin.v2"
 	"java-mini-ls-go/server"
 	"net"
 	"os"
 )
 
-// The port to listen on
-const port = 9257
+var (
+	listen = kingpin.Flag("listen", "Start the server and listen for incoming connections, "+
+		"rather than trying to connect to an existing socket.").Bool()
+	port = kingpin.Flag("socket", "The port to use").Default("9257").Int()
+)
 
 func main() {
-	logger, err := zap.NewDevelopment()
+	kingpin.Parse()
+
+	logConfig := zap.NewDevelopmentConfig()
+	logConfig.OutputPaths = []string{"stdout"}
+	logConfig.ErrorOutputPaths = []string{"stdout"}
+
+	logger, err := logConfig.Build()
 	if err != nil {
 		_, _ = fmt.Fprint(os.Stderr, err)
 		os.Exit(1)
@@ -25,7 +35,7 @@ func main() {
 		// flushes buffer, if any
 		err := logger.Sync()
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Error flushing logs: ", err)
 		}
 	}(logger)
 
@@ -44,7 +54,16 @@ func main() {
 }
 
 func runServer(ctx context.Context, logger *zap.Logger) error {
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	addr := fmt.Sprintf("127.0.0.1:%d", *port)
+
+	if listen != nil && *listen {
+		return runServerListen(ctx, logger, addr)
+	} else {
+		return runServerConnect(ctx, logger, addr)
+	}
+}
+
+func runServerListen(ctx context.Context, logger *zap.Logger, addr string) error {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return errors.Wrapf(err, "Error listening on %s", addr)
@@ -61,4 +80,21 @@ func runServer(ctx context.Context, logger *zap.Logger) error {
 			server.RunServer(ctx, logger, jsonrpc2.NewStream(conn))
 		}()
 	}
+}
+
+func runServerConnect(ctx context.Context, logger *zap.Logger, addr string) error {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return errors.Wrapf(err, "Error connecting to %s", addr)
+	}
+
+	ctx, _, _ = server.RunServer(ctx, logger, jsonrpc2.NewStream(conn))
+
+	// Wait and let the server do its magic through the connection
+	select {
+	case <-ctx.Done():
+		logger.Info("Connection closed, server shutting down.")
+	}
+
+	return nil
 }
