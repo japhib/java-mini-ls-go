@@ -14,12 +14,12 @@ import (
 var _ protocol.Server = (*JavaLS)(nil)
 
 type JavaLS struct {
-	ctx context.Context
-	log *zap.Logger
+	ctx    context.Context
+	log    *zap.Logger
+	client protocol.Client
 
 	documentTextCache *util.SyncMap[string, protocol.TextDocumentItem]
-	//parsedDocumentCache *util.SyncMap[string, antlr.Tree]
-	symbols *util.SyncMap[string, []*parse.CodeSymbol]
+	symbols           *util.SyncMap[string, []*parse.CodeSymbol]
 }
 
 func RunServer(ctx context.Context, logger *zap.Logger, stream jsonrpc2.Stream) (context.Context, jsonrpc2.Conn, protocol.Client) {
@@ -28,10 +28,12 @@ func RunServer(ctx context.Context, logger *zap.Logger, stream jsonrpc2.Stream) 
 		log:               logger,
 		documentTextCache: util.NewSyncMap[string, protocol.TextDocumentItem](),
 		symbols:           util.NewSyncMap[string, []*parse.CodeSymbol](),
-		//parsedDocumentCache: util.NewSyncMap[string, antlr.Tree](),
 	}
 
-	return protocol.NewServer(ctx, jls, stream, jls.log.Named("client"))
+	ctx, conn, client := protocol.NewServer(ctx, jls, stream, jls.log.Named("client"))
+	jls.client = client
+
+	return ctx, conn, client
 }
 
 func (j *JavaLS) Initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
@@ -88,8 +90,21 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	uriString := (string)(textDocument.URI)
 	j.documentTextCache.Set(uriString, textDocument)
 
-	parsed := parse.Parse(textDocument.Text)
-	//j.parsedDocumentCache.Set(uriString, parsed)
+	parsed, errors := parse.Parse(textDocument.Text)
+
+	// publish diagnostics in a separate goroutine
+	go func(errors []parse.SyntaxError) {
+		params := &protocol.PublishDiagnosticsParams{
+			URI:         textDocument.URI,
+			Version:     (uint32)(textDocument.Version),
+			Diagnostics: util.Map(errors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
+		}
+
+		err := j.client.PublishDiagnostics(context.Background(), params)
+		if err != nil {
+			j.log.Error(fmt.Sprintf("Error publishing diagnostics: %v", err))
+		}
+	}(errors)
 
 	symbols := parse.FindSymbols(parsed)
 	fmt.Println("symbols:", symbols)

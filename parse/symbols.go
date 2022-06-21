@@ -100,6 +100,7 @@ func (cs *CodeSymbol) String() string {
 	return cs.stringRecursive(1)
 }
 
+// FindSymbols is the entrypoint for finding symbols in a source file
 func FindSymbols(tree antlr.Tree) []*CodeSymbol {
 	visitor := &symbolVisitor{
 		scopeTracker: NewScopeTracker[CodeSymbol](&symbolScopeCreator{}),

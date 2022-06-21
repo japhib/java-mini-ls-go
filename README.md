@@ -9,11 +9,11 @@ In the future I'd like to experiment with making parts of the language server mo
 ## Features implemented
 
 - Document symbols
+- Syntax errors
 
 ## Features planned for proof-of-concept
 
 - Automatically parse all files in project on startup
-- Syntax errors
 - Go to definition (for user-defined stuff only)
 - Find references (for user-defined stuff only)
 - Errors on undefined variable usage

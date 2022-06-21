@@ -32,11 +32,12 @@ func CheckEquals(t *testing.T, prefix string, expected []ExpectedSymbol, actual 
 }
 
 func TestFindSymbols_Simple(t *testing.T) {
-	tree := Parse(`
+	tree, errors := Parse(`
 class MyClass {
 	public int asdf;
 }
 `)
+	assert.Equal(t, 0, len(errors))
 	symbols := FindSymbols(tree)
 
 	expected := []ExpectedSymbol{
@@ -49,7 +50,7 @@ class MyClass {
 }
 
 func TestFindSymbols_NestedClass(t *testing.T) {
-	tree := Parse(`
+	tree, errors := Parse(`
 class MyClass {
 	public String name;
 	public int asdf;
@@ -71,6 +72,7 @@ enum MyEnum {
 	First, Second, Third
 }
 `)
+	assert.Equal(t, 0, len(errors))
 	symbols := FindSymbols(tree)
 
 	expected := []ExpectedSymbol{

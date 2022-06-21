@@ -65,12 +65,13 @@ func (s *scopedVisitor1) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationC
 }
 
 func TestScopedVisitor(t *testing.T) {
-	tree := Parse(`
+	tree, errors := Parse(`
 class MyClass{ 
 	class Nested{ 
 		public String asdf; 
 	} 
 }`)
+	assert.Equal(t, 0, len(errors))
 
 	visitor := scopedVisitor1{
 		scopeTracker: NewScopeTracker[scope1](&scopeCreator1{}),

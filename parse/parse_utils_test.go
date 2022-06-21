@@ -17,11 +17,17 @@ func (l *listener1) EnterClassDeclaration(ctx *javaparser.ClassDeclarationContex
 	l.nameOfClass = ctx.Identifier().GetText()
 }
 
-func TestBasicParsing(t *testing.T) {
-	parsed := Parse("class MyClass{}")
+func TestParse_Basic(t *testing.T) {
+	parsed, errors := Parse("class MyClass{}")
 	listener := &listener1{}
 	antlr.ParseTreeWalkerDefault.Walk(listener, parsed)
+	assert.Equal(t, 0, len(errors))
 	assert.Equal(t, "MyClass", listener.nameOfClass)
+}
+
+func TestParse_SyntaxError(t *testing.T) {
+	_, errors := Parse("class MyClass")
+	assert.Equal(t, 1, len(errors))
 }
 
 type expectedToken struct {
