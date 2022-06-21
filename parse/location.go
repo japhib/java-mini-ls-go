@@ -3,6 +3,7 @@ package parse
 import (
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"go.lsp.dev/protocol"
 )
 
 type FileLocation struct {
@@ -44,6 +45,20 @@ type Bounds struct {
 	Start    FileLocation
 	End      FileLocation
 	Filename string
+}
+
+func BoundsToRange(bounds Bounds) protocol.Range {
+	return protocol.Range{
+		Start: protocol.Position{
+			// Subtract 1 since we use 1-based line numbers but LSP expects 0-based
+			Line:      (uint32)(bounds.Start.Line) - 1,
+			Character: (uint32)(bounds.Start.Column),
+		},
+		End: protocol.Position{
+			Line:      (uint32)(bounds.End.Line) - 1,
+			Character: (uint32)(bounds.End.Column),
+		},
+	}
 }
 
 func (b Bounds) Equals(other Bounds) bool {

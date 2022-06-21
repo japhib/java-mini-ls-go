@@ -112,11 +112,14 @@ func convertToDocumentSymbols(codeSymbols []*parse.CodeSymbol) []protocol.Docume
 	ret := make([]protocol.DocumentSymbol, 0, len(codeSymbols))
 
 	for _, s := range codeSymbols {
+		rrange := parse.BoundsToRange(s.Bounds)
 		documentSymbol := protocol.DocumentSymbol{
-			Name:     s.Name,
-			Detail:   s.Detail,
-			Kind:     symbolTypeMap[s.Type],
-			Children: convertToDocumentSymbols(s.Children),
+			Name:           s.Name,
+			Detail:         s.Detail,
+			Kind:           symbolTypeMap[s.Type],
+			Range:          rrange,
+			SelectionRange: rrange,
+			Children:       convertToDocumentSymbols(s.Children),
 		}
 		ret = append(ret, documentSymbol)
 	}

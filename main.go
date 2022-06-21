@@ -88,10 +88,11 @@ func runServerConnect(ctx context.Context, logger *zap.Logger, addr string) erro
 		return errors.Wrapf(err, "Error connecting to %s", addr)
 	}
 
-	ctx, _, _ = server.RunServer(ctx, logger, jsonrpc2.NewStream(conn))
+	_, con, _ := server.RunServer(ctx, logger, jsonrpc2.NewStream(conn))
 
-	// Wait for server to be done
-	<-ctx.Done()
+	// Wait for connection to close
+	doneChan := con.Done()
+	<-doneChan
 
 	logger.Info("Connection closed, server shutting down.")
 	return nil

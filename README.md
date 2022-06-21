@@ -6,6 +6,20 @@ Still in very early development/proof-of-concept stage.
 
 In the future I'd like to experiment with making parts of the language server modular & distribute-able. For example, instead of each local instance of the language server having a full in-memory copy of all the data structures representing the Java stdlib, what if that was instead managed by a central stdlib server? This has the potential to even further reduce memory usage and startup time.
 
+## Features implemented
+
+- Document symbols
+
+## Features planned for proof-of-concept
+
+- Automatically parse all files in project on startup
+- Syntax errors
+- Go to definition (for user-defined stuff only)
+- Find references (for user-defined stuff only)
+- Errors on undefined variable usage
+- Type checking (no generics though)
+- Hover support for built-in functions (parse the stdlib docs)
+
 # Credit
 
 - github.com/antlr/antlr4 for parsing

@@ -6,7 +6,7 @@ import (
 
 type ScopeCreator[TScope any] interface {
 	ShouldCreateScope(ruleType int) bool
-	CreateScope(ctx antlr.RuleContext) *TScope
+	CreateScope(ctx antlr.ParserRuleContext) *TScope
 }
 
 type ScopeTracker[TScope any] struct {

@@ -20,27 +20,11 @@ func (sc *scopeCreator1) ShouldCreateScope(ruleType int) bool {
 	switch ruleType {
 	case javaparser.JavaParserRULE_classDeclaration:
 		return true
-		// case javaparser.JavaParserRULE_methodDeclaration:
-		// 	return true
-		// case javaparser.JavaParserRULE_genericMethodDeclaration:
-		// 	return true
-		// case javaparser.JavaParserRULE_constructorDeclaration:
-		// 	return true
-		// case javaparser.JavaParserRULE_genericConstructorDeclaration:
-		// 	return true
-		// case javaparser.JavaParserRULE_interfaceDeclaration:
-		// 	return true
-		// case javaparser.JavaParserRULE_enumDeclaration:
-		// 	return true
-		// case javaparser.JavaParserRULE_annotationTypeDeclaration:
-		// 	return true
-		// case javaparser.JavaParserRULE_recordDeclaration:
-		// 	return true
 	}
 	return false
 }
 
-func (sc *scopeCreator1) CreateScope(ctx antlr.RuleContext) *scope1 {
+func (sc *scopeCreator1) CreateScope(ctx antlr.ParserRuleContext) *scope1 {
 	ret := &scope1{}
 
 	switch ctx.GetRuleIndex() {

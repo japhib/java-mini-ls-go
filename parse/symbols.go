@@ -50,15 +50,50 @@ type CodeSymbol struct {
 	Children []*CodeSymbol
 }
 
+func NewEmptyCodeSymbol(fromRule antlr.ParserRuleContext) *CodeSymbol {
+	startToken := fromRule.GetStart()
+	stopToken := fromRule.GetStop()
+
+	return &CodeSymbol{
+		Bounds: Bounds{
+			Start: FileLocation{startToken.GetLine(), startToken.GetColumn()},
+			End:   FileLocation{stopToken.GetLine(), stopToken.GetColumn()},
+		},
+		Children: make([]*CodeSymbol, 0),
+	}
+}
+
+func NewCodeSymbol(name string, ttype CodeSymbolType, fromRule antlr.ParserRuleContext) *CodeSymbol {
+	startToken := fromRule.GetStart()
+	stopToken := fromRule.GetStop()
+
+	return &CodeSymbol{
+		Name: name,
+		Type: ttype,
+		Bounds: Bounds{
+			Start: FileLocation{startToken.GetLine(), startToken.GetColumn()},
+			End:   FileLocation{stopToken.GetLine(), stopToken.GetColumn()},
+		},
+		Children: make([]*CodeSymbol, 0),
+	}
+}
+
+func NewCodeSymbolWithDetail(name string, ttype CodeSymbolType, fromRule antlr.ParserRuleContext, detail string) *CodeSymbol {
+	ret := NewCodeSymbol(name, ttype, fromRule)
+	ret.Detail = detail
+	return ret
+}
+
 func (cs *CodeSymbol) stringRecursive(recursionLevel int) string {
+	var childrenStr string
 	if cs.Children != nil && len(cs.Children) > 1 {
 		indent := strings.Repeat("\t", recursionLevel)
-		childrenStr := indent + strings.Join(util.Map(cs.Children, func(cs *CodeSymbol) string {
+		childrenStr = indent + strings.Join(util.Map(cs.Children, func(cs *CodeSymbol) string {
 			return cs.stringRecursive(recursionLevel + 1)
 		}), ",\n"+indent)
-		return fmt.Sprintf("(Name=%s,Type=%s,Children=[\n%s\n])", cs.Name, CodeSymbolTypeNames[cs.Type], childrenStr)
+		childrenStr = fmt.Sprintf(",Children=[\n%s\n]", childrenStr)
 	}
-	return fmt.Sprintf("(Name=%s,Type=%s)", cs.Name, CodeSymbolTypeNames[cs.Type])
+	return fmt.Sprintf("(Name=%s,Type=%s,Loc=%s%s)", cs.Name, CodeSymbolTypeNames[cs.Type], cs.Bounds.String(), childrenStr)
 }
 
 func (cs *CodeSymbol) String() string {
@@ -102,12 +137,10 @@ func (sc *symbolScopeCreator) ShouldCreateScope(ruleType int) bool {
 	return false
 }
 
-func (sc *symbolScopeCreator) CreateScope(ctx antlr.RuleContext) *CodeSymbol {
+func (sc *symbolScopeCreator) CreateScope(ctx antlr.ParserRuleContext) *CodeSymbol {
 	ctx.GetChildren()
 
-	ret := &CodeSymbol{
-		Children: make([]*CodeSymbol, 0),
-	}
+	ret := NewEmptyCodeSymbol(ctx)
 
 	switch ctx.GetRuleIndex() {
 	case javaparser.JavaParserRULE_classDeclaration:
@@ -180,11 +213,8 @@ func (s *symbolVisitor) addSymbol(symbol *CodeSymbol) {
 	}
 }
 
-func (s *symbolVisitor) addNewSymbol(name string, ttype CodeSymbolType) {
-	symbol := &CodeSymbol{
-		Name: name,
-		Type: ttype,
-	}
+func (s *symbolVisitor) addNewSymbol(name string, ttype CodeSymbolType, ctx antlr.ParserRuleContext) {
+	symbol := NewCodeSymbol(name, ttype, ctx)
 	s.addSymbol(symbol)
 }
 
@@ -201,37 +231,37 @@ func (s *symbolVisitor) ExitEveryRule(ctx antlr.ParserRuleContext) {
 
 // EnterPackageDeclaration is called when production packageDeclaration is entered.
 func (s *symbolVisitor) EnterPackageDeclaration(ctx *javaparser.PackageDeclarationContext) {
-	s.addNewSymbol(ctx.QualifiedName().GetText(), CodeSymbolPackage)
+	s.addNewSymbol(ctx.QualifiedName().GetText(), CodeSymbolPackage, ctx)
 }
 
 // EnterEnumConstant is called when production enumConstant is entered.
 func (s *symbolVisitor) EnterEnumConstant(ctx *javaparser.EnumConstantContext) {
-	s.addNewSymbol(ctx.Identifier().GetText(), CodeSymbolEnumMember)
+	s.addNewSymbol(ctx.Identifier().GetText(), CodeSymbolEnumMember, ctx)
 }
 
 // EnterConstantDeclarator is called when production constantDeclarator is entered.
 func (s *symbolVisitor) EnterConstantDeclarator(ctx *javaparser.ConstantDeclaratorContext) {
-	s.addNewSymbol(ctx.Identifier().GetText(), CodeSymbolConstant)
+	s.addNewSymbol(ctx.Identifier().GetText(), CodeSymbolConstant, ctx)
 }
 
 // EnterVariableDeclaratorId is called when production variableDeclarator is entered.
 func (s *symbolVisitor) EnterVariableDeclaratorId(ctx *javaparser.VariableDeclaratorIdContext) {
-	s.addNewSymbol(ctx.Identifier().GetText(), CodeSymbolVariable)
+	s.addNewSymbol(ctx.Identifier().GetText(), CodeSymbolVariable, ctx)
 }
 
 // EnterModuleDeclaration is called when production moduleDeclaration is entered.
 func (s *symbolVisitor) EnterModuleDeclaration(ctx *javaparser.ModuleDeclarationContext) {
-	s.addNewSymbol(ctx.QualifiedName().GetText(), CodeSymbolPackage)
+	s.addNewSymbol(ctx.QualifiedName().GetText(), CodeSymbolPackage, ctx)
 }
 
 // EnterCatchClause is called when production catchClause is entered.
 func (s *symbolVisitor) EnterCatchClause(ctx *javaparser.CatchClauseContext) {
-	s.addNewSymbol(ctx.Identifier().GetText(), CodeSymbolVariable)
+	s.addNewSymbol(ctx.Identifier().GetText(), CodeSymbolVariable, ctx)
 }
 
 // EnterLambdaParameters is called when production lambdaParameters is entered.
 func (s *symbolVisitor) EnterLambdaParameters(ctx *javaparser.LambdaParametersContext) {
 	for _, ident := range ctx.AllIdentifier() {
-		s.addNewSymbol(ident.GetText(), CodeSymbolVariable)
+		s.addNewSymbol(ident.GetText(), CodeSymbolVariable, ctx)
 	}
 }
