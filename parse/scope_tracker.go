@@ -41,10 +41,18 @@ func (sv *ScopeTracker[TScope]) CheckExitScope(ctx antlr.ParserRuleContext) bool
 }
 
 func (sv *ScopeTracker[TScope]) GetTopScope() *TScope {
+	if len(sv.ScopeStack) == 0 {
+		return nil
+	}
+
 	return sv.ScopeStack[len(sv.ScopeStack)-1]
 }
 
 func (sv *ScopeTracker[TScope]) GetTopScopeMinus(offsetFromTop int) *TScope {
+	if len(sv.ScopeStack)-offsetFromTop <= 0 {
+		return nil
+	}
+
 	return sv.ScopeStack[len(sv.ScopeStack)-1-offsetFromTop]
 }
 

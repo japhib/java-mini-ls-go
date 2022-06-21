@@ -1,12 +1,54 @@
 package parse
 
 import (
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-func TestFindSymbols(t *testing.T) {
+type ExpectedSymbol struct {
+	Name     string
+	Type     CodeSymbolType
+	Children []ExpectedSymbol
+}
+
+func CheckEquals(t *testing.T, prefix string, expected []ExpectedSymbol, actual []*CodeSymbol) {
+	if prefix == "" {
+		prefix = "root"
+	}
+
+	assert.Equal(t, len(expected), len(actual), "Length not equal for %s", prefix)
+
+	if len(expected) == len(actual) {
+		for i, exp := range expected {
+			assert.Equal(t, exp.Name, actual[i].Name, "Name not equal for %s[%d]", prefix, i)
+			assert.Equal(t, exp.Type, actual[i].Type, "Type not equal for %s[%d]", prefix, i)
+
+			if exp.Children != nil {
+				// recurse to children
+				CheckEquals(t, prefix+"."+exp.Name, exp.Children, actual[i].Children)
+			}
+		}
+	}
+}
+
+func TestFindSymbols_Simple(t *testing.T) {
+	tree := Parse(`
+class MyClass {
+	public int asdf;
+}
+`)
+	symbols := FindSymbols(tree)
+
+	expected := []ExpectedSymbol{
+		{"MyClass", CodeSymbolClass, []ExpectedSymbol{
+			{"asdf", CodeSymbolVariable, nil},
+		}},
+	}
+
+	CheckEquals(t, "", expected, symbols)
+}
+
+func TestFindSymbols_NestedClass(t *testing.T) {
 	tree := Parse(`
 class MyClass {
 	public String name;
@@ -30,20 +72,27 @@ enum MyEnum {
 }
 `)
 	symbols := FindSymbols(tree)
-	fmt.Println(symbols)
 
-	assert.Equal(t, 2, len(symbols))
-	assert.Equal(t, "MyClass", symbols[0].Name)
-	assert.Equal(t, CodeSymbolClass, symbols[0].Type)
-	assert.Equal(t, "MyEnum", symbols[1].Name)
-	assert.Equal(t, CodeSymbolEnum, symbols[1].Type)
+	expected := []ExpectedSymbol{
+		{"MyClass", CodeSymbolClass, []ExpectedSymbol{
+			{"name", CodeSymbolVariable, nil},
+			{"asdf", CodeSymbolVariable, nil},
+			{"MyClass", CodeSymbolConstructor, []ExpectedSymbol{
+				{"a", CodeSymbolVariable, nil},
+			}},
+			{"DoSomething", CodeSymbolMethod, []ExpectedSymbol{
+				{"declaredVar", CodeSymbolVariable, nil},
+			}},
+			{"Nested", CodeSymbolClass, []ExpectedSymbol{
+				{"nestedInt", CodeSymbolVariable, nil},
+			}},
+		}},
+		{"MyEnum", CodeSymbolEnum, []ExpectedSymbol{
+			{"First", CodeSymbolEnumMember, nil},
+			{"Second", CodeSymbolEnumMember, nil},
+			{"Third", CodeSymbolEnumMember, nil},
+		}},
+	}
 
-	myclassChildren := symbols[0].Children
-	assert.Equal(t, 3, len(myclassChildren))
-	assert.Equal(t, "MyClass", myclassChildren[0].Name)
-	assert.Equal(t, CodeSymbolConstructor, myclassChildren[0].Type)
-	assert.Equal(t, "DoSomething", myclassChildren[1].Name)
-	assert.Equal(t, CodeSymbolMethod, myclassChildren[1].Type)
-	assert.Equal(t, "Nested", myclassChildren[2].Name)
-	assert.Equal(t, CodeSymbolClass, myclassChildren[2].Type)
+	CheckEquals(t, "", expected, symbols)
 }

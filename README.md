@@ -2,6 +2,8 @@
 
 A lightweight language server for Java, written in Go. Goal is to make a reasonably full language server implementation that can be run effectively on resource-constrained systems like Docker containers, with fast startup time and as little CPU/memory usage as possible.
 
+Still in very early development/proof-of-concept stage.
+
 In the future I'd like to experiment with making parts of the language server modular & distribute-able. For example, instead of each local instance of the language server having a full in-memory copy of all the data structures representing the Java stdlib, what if that was instead managed by a central stdlib server? This has the potential to even further reduce memory usage and startup time.
 
 # Credit

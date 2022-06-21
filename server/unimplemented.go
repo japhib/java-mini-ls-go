@@ -87,10 +87,6 @@ func (j *JavaLS) DocumentLinkResolve(ctx context.Context, params *protocol.Docum
 	panic("DocumentLinkResolve unimplemented")
 }
 
-func (j *JavaLS) DocumentSymbol(ctx context.Context, params *protocol.DocumentSymbolParams) ([]interface{}, error) {
-	panic("DocumentSymbol unimplemented")
-}
-
 func (j *JavaLS) ExecuteCommand(ctx context.Context, params *protocol.ExecuteCommandParams) (interface{}, error) {
 	panic("ExecuteCommand unimplemented")
 }
