@@ -34,3 +34,7 @@ func Parse(input string) *javaparser.CompilationUnitContext {
 	p.BuildParseTrees = true
 	return p.CompilationUnit().(*javaparser.CompilationUnitContext)
 }
+
+func GetClassDeclBounds(*javaparser.ClassDeclarationContext) Bounds {
+	return Bounds{}
+}

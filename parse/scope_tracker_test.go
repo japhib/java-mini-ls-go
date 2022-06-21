@@ -40,12 +40,12 @@ func (sc *scopeCreator1) ShouldCreateScope(ruleType int) bool {
 	return false
 }
 
-func (sc *scopeCreator1) CreateScope(ctx antlr.RuleContext) scope1 {
-	ret := scope1{}
+func (sc *scopeCreator1) CreateScope(ctx antlr.RuleContext) *scope1 {
+	ret := &scope1{}
 
 	switch ctx.GetRuleIndex() {
 	case javaparser.JavaParserRULE_classDeclaration:
-		ret.name = ctx.(*javaparser.ClassDeclarationContext).Identifier().(antlr.ParseTree).GetText()
+		ret.name = ctx.(*javaparser.ClassDeclarationContext).Identifier().GetText()
 	}
 
 	return ret
