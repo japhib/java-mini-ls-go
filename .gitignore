@@ -3,3 +3,4 @@ java-mini-ls-go
 node_modules/
 out/
 .antlr/
+java_sdk_cache/

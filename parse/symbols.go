@@ -44,7 +44,7 @@ type CodeSymbol struct {
 	Type CodeSymbolType
 	// Detail is an optional detail about the symbol - method signature, field type/default value, etc.
 	Detail string
-	// Location is the location in the code of this symbol
+	// Bounds is the location in the code of this symbol
 	Bounds Bounds
 	// Children is a list of all CodeSymbols nested under this one
 	Children []*CodeSymbol
@@ -147,7 +147,6 @@ func (sc *symbolScopeCreator) CreateScope(ctx antlr.ParserRuleContext) *CodeSymb
 	case javaparser.JavaParserRULE_classDeclaration:
 		ret.Type = CodeSymbolClass
 		ret.Name = ctx.(*javaparser.ClassDeclarationContext).Identifier().GetText()
-		//ret.Bounds = GetClassDeclBounds(ctx.(*javaparser.ClassDeclarationContext))
 	case javaparser.JavaParserRULE_methodDeclaration:
 		ret.Type = CodeSymbolMethod
 		ret.Name = ctx.(*javaparser.MethodDeclarationContext).Identifier().GetText()

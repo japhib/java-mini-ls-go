@@ -13,9 +13,9 @@ In the future I'd like to experiment with making parts of the language server mo
 
 ## Features planned for proof-of-concept
 
-- Automatically parse all files in project on startup
 - Go to definition (for user-defined stuff only)
 - Find references (for user-defined stuff only)
+- Automatically parse all files in project on startup
 - Errors on undefined variable usage
 - Type checking (no generics though)
 - Hover support for built-in functions (parse the stdlib docs)
