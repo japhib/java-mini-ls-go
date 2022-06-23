@@ -38,6 +38,12 @@ func RunServer(ctx context.Context, logger *zap.Logger, stream jsonrpc2.Stream) 
 
 func (j *JavaLS) Initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
 	j.log.Info("Initialize")
+
+	_, err := parse.LoadBuiltinTypes()
+	if err != nil {
+		j.log.Error(err.Error())
+	}
+
 	return &protocol.InitializeResult{
 		Capabilities: protocol.ServerCapabilities{
 			TextDocumentSync: protocol.TextDocumentSyncOptions{

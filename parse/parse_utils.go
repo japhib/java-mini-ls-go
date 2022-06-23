@@ -50,9 +50,8 @@ type SyntaxError struct {
 func (se *SyntaxError) ToDiagnostic() protocol.Diagnostic {
 	return protocol.Diagnostic{
 		Range: BoundsToRange(Bounds{
-			Start:    se.Loc,
-			End:      FileLocation{se.Loc.Line, se.Loc.Column + len(se.Token)},
-			Filename: "",
+			Start: se.Loc,
+			End:   FileLocation{se.Loc.Line, se.Loc.Column + len(se.Token)},
 		}),
 		Severity: protocol.DiagnosticSeverityError,
 		Source:   "java-mini-ls",

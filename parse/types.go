@@ -31,28 +31,17 @@ func getStaticStr(isStatic bool) string {
 }
 
 type JavaType struct {
-	Name        string
-	PackageName string
-	Visibility  VisibilityType
-	Fields      []*JavaField
-	Methods     []*JavaMethod
+	Name         string
+	Package      string
+	Module       string
+	Visibility   VisibilityType
+	Constructors []*JavaConstructor
+	Fields       map[string]*JavaField
+	Methods      map[string]*JavaMethod
 }
 
 func (jt *JavaType) String() string {
 	return jt.Name
-}
-
-func getOrCreateBuiltinType(name string) *JavaType {
-	jtype, ok := BuiltinTypes[name]
-	if !ok {
-		jtype = &JavaType{
-			Name:       name,
-			Visibility: VisibilityPublic,
-		}
-		BuiltinTypes[name] = jtype
-	}
-
-	return jtype
 }
 
 type JavaField struct {
@@ -65,6 +54,11 @@ type JavaField struct {
 
 func (jf *JavaField) String() string {
 	return fmt.Sprintf("%s %s%s %s", VisibilityTypeStrs[jf.Visibility], getStaticStr(jf.IsStatic), jf.Type.Name, jf.Name)
+}
+
+type JavaConstructor struct {
+	Visibility VisibilityType
+	Arguments  []*JavaArgument
 }
 
 type JavaMethod struct {
