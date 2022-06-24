@@ -25,6 +25,7 @@ var VisibilityTypeStrs = map[VisibilityType]string{
 type JavaTypeType int
 
 const (
+	JavaTypePrimitive JavaTypeType = iota
 	JavaTypeClass     JavaTypeType = iota
 	JavaTypeInterface JavaTypeType = iota
 	JavaTypeEnum      JavaTypeType = iota

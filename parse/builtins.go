@@ -91,6 +91,9 @@ func loadBuiltinTypesFromDisk() error {
 
 	builtinTypes = make(map[string]*JavaType)
 
+	// add primitive types before we load the rest of the types
+	addPrimitiveTypes()
+
 	err = loadJsonTypes(jsonTypes)
 	if err != nil {
 		return errors.Wrapf(err, "Error parsing JSON")
@@ -136,6 +139,27 @@ func readJsonFromDisk() ([]javaJsonType, error) {
 	}
 
 	return types, nil
+}
+
+func addPrimitiveTypes() {
+	primitives := []string{
+		"byte",
+		"short",
+		"int",
+		"long",
+		"float",
+		"double",
+		"boolean",
+		"char",
+	}
+
+	for _, name := range primitives {
+		builtinTypes[name] = &JavaType{
+			Name:       name,
+			Visibility: VisibilityPublic,
+			Type:       JavaTypePrimitive,
+		}
+	}
 }
 
 // Loads provided JSON types into builtinTypes map

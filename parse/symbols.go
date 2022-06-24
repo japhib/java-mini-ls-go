@@ -51,14 +51,8 @@ type CodeSymbol struct {
 }
 
 func NewEmptyCodeSymbol(fromRule antlr.ParserRuleContext) *CodeSymbol {
-	startToken := fromRule.GetStart()
-	stopToken := fromRule.GetStop()
-
 	return &CodeSymbol{
-		Bounds: Bounds{
-			Start: FileLocation{startToken.GetLine(), startToken.GetColumn()},
-			End:   FileLocation{stopToken.GetLine(), stopToken.GetColumn()},
-		},
+		Bounds:   ParserRuleContextToBounds(fromRule),
 		Children: make([]*CodeSymbol, 0),
 	}
 }
@@ -138,9 +132,7 @@ func (sc *symbolScopeCreator) ShouldCreateScope(ruleType int) bool {
 	return false
 }
 
-func (sc *symbolScopeCreator) CreateScope(ctx antlr.ParserRuleContext) *CodeSymbol {
-	ctx.GetChildren()
-
+func (sc *symbolScopeCreator) CreateScope(_ *CodeSymbol, ctx antlr.ParserRuleContext) *CodeSymbol {
 	ret := NewEmptyCodeSymbol(ctx)
 
 	switch ctx.GetRuleIndex() {

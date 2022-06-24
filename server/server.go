@@ -98,19 +98,21 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 
 	parsed, errors := parse.Parse(textDocument.Text)
 
-	// publish diagnostics in a separate goroutine
-	go func(errors []parse.SyntaxError) {
-		params := &protocol.PublishDiagnosticsParams{
-			URI:         textDocument.URI,
-			Version:     (uint32)(textDocument.Version),
-			Diagnostics: util.Map(errors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
-		}
+	if len(errors) > 0 {
+		// publish diagnostics in a separate goroutine
+		go func(errors []parse.SyntaxError) {
+			params := &protocol.PublishDiagnosticsParams{
+				URI:         textDocument.URI,
+				Version:     (uint32)(textDocument.Version),
+				Diagnostics: util.Map(errors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
+			}
 
-		err := j.client.PublishDiagnostics(context.Background(), params)
-		if err != nil {
-			j.log.Error(fmt.Sprintf("Error publishing diagnostics: %v", err))
-		}
-	}(errors)
+			err := j.client.PublishDiagnostics(context.Background(), params)
+			if err != nil {
+				j.log.Error(fmt.Sprintf("Error publishing diagnostics: %v", err))
+			}
+		}(errors)
+	}
 
 	symbols := parse.FindSymbols(parsed)
 	//fmt.Println("symbols:", symbols)

@@ -6,7 +6,7 @@ import (
 
 type ScopeCreator[TScope any] interface {
 	ShouldCreateScope(ruleType int) bool
-	CreateScope(ctx antlr.ParserRuleContext) *TScope
+	CreateScope(parent *TScope, ctx antlr.ParserRuleContext) *TScope
 }
 
 type ScopeTracker[TScope any] struct {
@@ -25,7 +25,7 @@ func NewScopeTracker[TScope any](scopeCreator ScopeCreator[TScope]) *ScopeTracke
 func (sv *ScopeTracker[TScope]) CheckEnterScope(ctx antlr.ParserRuleContext) bool {
 	if sv.Creator.ShouldCreateScope(ctx.GetRuleIndex()) {
 		// Create new scope and add to stack
-		sv.ScopeStack = append(sv.ScopeStack, sv.Creator.CreateScope(ctx))
+		sv.ScopeStack = append(sv.ScopeStack, sv.Creator.CreateScope(sv.GetTopScope(), ctx))
 		return true
 	}
 	return false

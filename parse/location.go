@@ -2,6 +2,7 @@ package parse
 
 import (
 	"fmt"
+	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"go.lsp.dev/protocol"
 )
 
@@ -22,6 +23,16 @@ func (fl FileLocation) String() string {
 type Bounds struct {
 	Start FileLocation
 	End   FileLocation
+}
+
+func ParserRuleContextToBounds(ctx antlr.ParserRuleContext) Bounds {
+	startToken := ctx.GetStart()
+	stopToken := ctx.GetStop()
+
+	return Bounds{
+		Start: FileLocation{startToken.GetLine(), startToken.GetColumn()},
+		End:   FileLocation{stopToken.GetLine(), stopToken.GetColumn()},
+	}
 }
 
 func BoundsToRange(bounds Bounds) protocol.Range {
