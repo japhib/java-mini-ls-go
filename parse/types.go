@@ -22,6 +22,22 @@ var VisibilityTypeStrs = map[VisibilityType]string{
 	VisibilityProtected: "protected",
 }
 
+type JavaTypeType int
+
+const (
+	JavaTypeClass     JavaTypeType = iota
+	JavaTypeInterface JavaTypeType = iota
+	JavaTypeEnum      JavaTypeType = iota
+	JavaTypeRecord    JavaTypeType = iota
+)
+
+var JavaTypeTypeStrs = map[JavaTypeType]string{
+	JavaTypeClass:     "class",
+	JavaTypeInterface: "interface",
+	JavaTypeEnum:      "enum",
+	JavaTypeRecord:    "record",
+}
+
 func getStaticStr(isStatic bool) string {
 	if isStatic {
 		return "static "
@@ -34,20 +50,21 @@ type JavaType struct {
 	Name         string
 	Package      string
 	Module       string
-	Visibility   VisibilityType
 	Constructors []*JavaConstructor
 	Fields       map[string]*JavaField
 	Methods      map[string]*JavaMethod
+	Visibility   VisibilityType
+	Type         JavaTypeType
 }
 
 func (jt *JavaType) String() string {
-	return jt.Name
+	return fmt.Sprintf("%s %s %s", VisibilityTypeStrs[jt.Visibility], JavaTypeTypeStrs[jt.Type], jt.Name)
 }
 
 type JavaField struct {
 	Name       string
-	Visibility VisibilityType
 	Type       *JavaType
+	Visibility VisibilityType
 	IsStatic   bool
 	IsFinal    bool
 }
@@ -63,9 +80,9 @@ type JavaConstructor struct {
 
 type JavaMethod struct {
 	Name       string
-	Visibility VisibilityType
 	ReturnType *JavaType
 	Arguments  []*JavaArgument
+	Visibility VisibilityType
 	IsStatic   bool
 }
 

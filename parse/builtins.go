@@ -41,7 +41,7 @@ func LoadBuiltinTypes() (map[string]*JavaType, error) {
 	now = time.Now()
 	endTime := now.UnixMilli()
 	duration := endTime - startTime
-	fmt.Printf("Done loading Java standard library types (took %dms)\n", duration)
+	fmt.Printf("Loaded %d Java standard library types in %dms\n", len(builtinTypes), duration)
 
 	return builtinTypes, nil
 }
@@ -122,6 +122,8 @@ func readJsonFromDisk() ([]javaJsonType, error) {
 		}
 	}(jsonFile)
 
+	// Currently we read the entire file into memory. If it gets too big, we may want to stream it instead:
+	// https://stackoverflow.com/questions/31794355/decode-large-stream-json
 	bytes, err := ioutil.ReadAll(jsonFile)
 	if err != nil {
 		return nil, err

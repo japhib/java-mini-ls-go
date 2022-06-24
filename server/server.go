@@ -113,7 +113,7 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	}(errors)
 
 	symbols := parse.FindSymbols(parsed)
-	fmt.Println("symbols:", symbols)
+	//fmt.Println("symbols:", symbols)
 	j.symbols.Set(uriString, symbols)
 }
 
@@ -149,18 +149,19 @@ func convertToDocumentSymbols(codeSymbols []*parse.CodeSymbol) []protocol.Docume
 }
 
 func (j *JavaLS) DocumentSymbol(ctx context.Context, params *protocol.DocumentSymbolParams) ([]interface{}, error) {
-	ret := []interface{}{}
+	ret := make([]interface{}, 0)
 
 	symbols, _ := j.symbols.Get((string)(params.TextDocument.URI))
 
 	if symbols != nil {
 		docSymbols := convertToDocumentSymbols(symbols)
+		ret = make([]interface{}, len(docSymbols))
 		for _, ds := range docSymbols {
 			ret = append(ret, ds)
 		}
 	}
 
-	fmt.Println("ret: ", ret)
+	//fmt.Println("ret: ", ret)
 
 	return ret, nil
 }
