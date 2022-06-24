@@ -215,6 +215,7 @@ func toArg(arg javaJsonArg) *JavaArgument {
 func getOrCreateBuiltinType(name string) *JavaType {
 	jtype, ok := builtinTypes[name]
 	if !ok {
+		fmt.Println("Creating built-in type: ", name)
 		jtype = &JavaType{
 			Name:       name,
 			Visibility: VisibilityPublic,

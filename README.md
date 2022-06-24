@@ -19,6 +19,8 @@ In the future I'd like to experiment with making parts of the language server mo
 - Errors on undefined variable usage
 - Type checking (no generics though)
 - Hover support for built-in functions (parse the stdlib docs)
+- Fix imports action
+- Priority order for certain things, like java.util.List taking precedence over java.awt.List
 
 # Credit
 

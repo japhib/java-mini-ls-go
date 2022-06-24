@@ -19,16 +19,45 @@ function toCachedPath(url) {
   return path.join(__dirname, cacheFolder, trimmed);
 }
 
-function stripNewlines(text) {
-  // the html parser puts a bunch of unnecessary newlines in
+function stripWhitespace(text) {
+  // the html parser puts a bunch of unnecessary newlines in.
+  // '\xa0' is non-breaking space.
+  // FYI `replaceAll` only exists in Node v16+.
+  return text.replaceAll(/[\s\xa0]+/g, ' ');
+}
 
-  // FYI `replaceAll` only exists in Node v16+
-  text = text.replaceAll('\n', '');
+const openingAngleBracket = '<'.charCodeAt(0);
+const closingAngleBracket = '>'.charCodeAt(0);
 
-  // '\xa0' is non-breaking space
-  text = text.replaceAll('\xa0', ' ');
+function stripGenerics(text) {
+  if (!text.includes('<')) {
+    return text;
+  }
 
-  return text;
+  // We have to iterate through it point by point since the generics can
+  // be fairly complicated, e.g. `addAll<A>(Collection<List<A, B>, C> c)`
+
+  let nestingLevel = 0;
+  const builtString = [];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text.charCodeAt(i);
+
+    if (ch === openingAngleBracket) {
+      nestingLevel++;
+    } if (ch === closingAngleBracket) {
+      nestingLevel--;
+    } else if (nestingLevel === 0) {
+      builtString.push(ch);
+    }
+  }
+
+  if (nestingLevel !== 0) {
+    // Angle brackets didn't match up, so it probably wasn't actual generics.
+    console.log(`Angle brackets didn't match up: ${text}`);
+    return text;
+  }
+
+  return String.fromCharCode(...builtString);
 }
 
 async function getData(url) {
@@ -61,8 +90,6 @@ async function genType(url) {
   data.type = titleSplit[0].toLowerCase();
   data.name = titleSplit[1];
 
-  console.log('Getting type data for class ' + data.name);
-
   const subtitles = root.querySelectorAll('.header > .sub-title');
   for (const st of subtitles) {
     const label = st.querySelector('span').textContent;
@@ -77,6 +104,8 @@ async function genType(url) {
         break;
     }
   }
+
+  console.log(`getting type data for ${data.type} ${data.package}.${data.name}`);
 
   data.fields = parseTable('field', root, '.field-summary .summary-table');
   data.constructors = parseTable('constructor', root, '.constructor-summary .summary-table').map(parseArgs);
@@ -121,7 +150,7 @@ function parseTable(type, root, tableSelector) {
 
     for (let j = 0; j < numColumns; j++) {
       const columnName = columns[j];
-      let content = stripNewlines(tableChildren[i + j].textContent);
+      let content = stripWhitespace(stripGenerics(tableChildren[i + j].textContent));
 
       if (columnName === 'modifierAndType') {
         // modifierAndType could look like "static final String", in which case we want
@@ -144,7 +173,8 @@ function parseTable(type, root, tableSelector) {
 }
 
 function parseArgs(item) {
-  const { name } = item;
+  let { name } = item;
+  name = stripGenerics(name);
 
   const matches = /(.*)\((.*)\)/.exec(name);
   if (!matches) {
@@ -174,6 +204,17 @@ function parseArgs(item) {
   return item;
 }
 
+async function getModuleLinks(basePath) {
+  const modulesHtml = await getData(basePath);
+  const modulesRoot = parse(modulesHtml);
+
+  return modulesRoot
+    .querySelectorAll('#all-modules-table .summary-table .col-first a')
+    .filter(a => a.textContent.trim().startsWith('java.'))
+    .map(el => el.getAttribute('href'))
+    .map(link => new URL(link, basePath).toString());
+}
+
 async function getPackageLinks(modulePath) {
   const moduleHtml = await getData(modulePath);
   const root = parse(moduleHtml);
@@ -195,35 +236,38 @@ async function getClassLinks(packagePath) {
 }
 
 async function main() {
-  // const t = await genType('https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/String.html')
+  // const t = await genType('https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/List.html')
   // const types = [ t ];
   // fs.writeFileSync(outFilePath, JSON.stringify(types))
 
-  const baseModulePath = 'https://docs.oracle.com/en/java/javase/17/docs/api/java.base/module-summary.html';
-  const packageLinks = await getPackageLinks(baseModulePath);
-  console.log(packageLinks);
+  const basePath = 'https://docs.oracle.com/en/java/javase/17/docs/api/index.html';
+  const moduleLinks = await getModuleLinks(basePath);
+  console.log(moduleLinks);
 
+  const types = [];
   let successCount = 0;
   let errorCount = 0;
-  
-  const types = [];
-  for (const packageLink of packageLinks) {
-    const classLinks = await getClassLinks(packageLink);
 
-    await Promise.all(classLinks.map(async classLink => {
-      try {
-        const type = await genType(classLink);
-        types.push(type);
-        successCount++;
-      } catch (e) {
-        console.error(e);
-        errorCount++;
-      }
+  await Promise.all(moduleLinks.map(async moduleLink => {
+    const packageLinks = await getPackageLinks(moduleLink);
+
+    await Promise.all(packageLinks.map(async packageLink => {
+      const classLinks = await getClassLinks(packageLink);
+
+      await Promise.all(classLinks.map(async classLink => {
+        try {
+          const type = await genType(classLink);
+          types.push(type);
+          successCount++;
+        } catch (e) {
+          console.error(e);
+          errorCount++;
+        }
+      }));
     }));
-  }
+  }));
 
   fs.writeFileSync(outFilePath, JSON.stringify(types));
-
   console.log(`Successes: ${successCount}, errors: ${errorCount}`)
 }
 
