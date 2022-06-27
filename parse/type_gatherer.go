@@ -25,6 +25,15 @@ func GatherTypes(tree antlr.Tree, builtins TypeMap) TypeMap {
 	return visitor.types
 }
 
+type formalParametersCtx interface {
+	FormalParameters() javaparser.IFormalParametersContext
+}
+
+type methodCtx interface {
+	formalParametersCtx
+	TypeTypeOrVoid() javaparser.ITypeTypeOrVoidContext
+}
+
 type typeGatherer struct {
 	javaparser.BaseJavaParserListener
 	scopeTracker          *ScopeTracker
@@ -72,7 +81,7 @@ func (tg *typeGatherer) handleNewScopeSecondPass(scope *Scope, ctx antlr.ParserR
 	case ScopeTypeConstructor:
 		fallthrough
 	case ScopeTypeGenericConstructor:
-		tg.addNewConstructorFromScope(scope, ctx)
+		tg.addNewConstructorFromScope(scope, ctx.(formalParametersCtx))
 
 	case ScopeTypeMethod:
 		fallthrough
@@ -81,7 +90,7 @@ func (tg *typeGatherer) handleNewScopeSecondPass(scope *Scope, ctx antlr.ParserR
 	case ScopeTypeInterfaceMethod:
 		fallthrough
 	case ScopeTypeGenericInterfaceMethod:
-		tg.addNewMethodFromScope(scope, ctx)
+		tg.addNewMethodFromScope(scope, ctx.(methodCtx))
 	}
 }
 
@@ -148,19 +157,19 @@ func (tg *typeGatherer) addNewTypeFromScope(scope *Scope, ttype JavaTypeType) {
 	tg.types[scope.Name] = newType
 }
 
-func (tg *typeGatherer) addNewConstructorFromScope(scope *Scope, ctx antlr.ParserRuleContext) {
+func (tg *typeGatherer) addNewConstructorFromScope(scope *Scope, ctx formalParametersCtx) {
 	// The top is the current scope, so we use top minus 1 to get the enclosing class
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
 	currType := tg.types[currTypeName]
 
 	newConstructor := &JavaConstructor{
-		Arguments: nil,
+		Arguments: tg.getArgsFromContext(ctx),
 	}
 
 	currType.Constructors = append(currType.Constructors, newConstructor)
 }
 
-func (tg *typeGatherer) addNewMethodFromScope(scope *Scope, ctx antlr.ParserRuleContext) {
+func (tg *typeGatherer) addNewMethodFromScope(scope *Scope, ctx methodCtx) {
 	// The top is the current scope, so we use top minus 1 to get the enclosing class
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
 	currType := tg.types[currTypeName]
@@ -172,21 +181,18 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *Scope, ctx antlr.ParserRule
 		IsStatic:   false,
 	}
 
-	switch tctx := ctx.(type) {
-	case *javaparser.MethodDeclarationContext:
-		returnType := tctx.TypeTypeOrVoid().GetText()
-		if returnType != "void" {
-			method.ReturnType = tg.lookupType(returnType)
-		}
-
-		method.Arguments = tg.getArgsFromContext(tctx)
-		method.IsStatic = tg.currentMemberIsStatic
+	returnType := ctx.TypeTypeOrVoid().GetText()
+	if returnType != "void" {
+		method.ReturnType = tg.lookupType(returnType)
 	}
+
+	method.Arguments = tg.getArgsFromContext(ctx)
+	method.IsStatic = tg.currentMemberIsStatic
 
 	currType.Methods[method.Name] = method
 }
 
-func (tg *typeGatherer) getArgsFromContext(ctx *javaparser.MethodDeclarationContext) []*JavaArgument {
+func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*JavaArgument {
 	args := make([]*JavaArgument, 0)
 
 	argsCtx := ctx.FormalParameters().(*javaparser.FormalParametersContext)

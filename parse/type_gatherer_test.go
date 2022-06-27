@@ -74,7 +74,7 @@ class MyClass {
 	public int asdf;
 	private Nested n;
 
-	public MyClass() {
+	public MyClass(int f) {
 		char a = 'a';
 	}
 
@@ -135,7 +135,12 @@ class MyClass {
 			},
 			Constructors: []*JavaConstructor{
 				{
-					Arguments: nil,
+					Arguments: []*JavaArgument{
+						{
+							Name: "f",
+							Type: intType,
+						},
+					},
 				},
 			},
 			Methods: map[string]*JavaMethod{
