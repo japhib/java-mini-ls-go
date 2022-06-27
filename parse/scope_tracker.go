@@ -4,6 +4,7 @@ import (
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"java-mini-ls-go/javaparser"
 	"java-mini-ls-go/util"
+	"strings"
 )
 
 type ScopeType int
@@ -46,25 +47,33 @@ func NewScopeTracker() *ScopeTracker {
 	}
 }
 
-func (sv *ScopeTracker) CheckEnterScope(ctx antlr.ParserRuleContext) *Scope {
-	if sv.shouldCreateScope(ctx.GetRuleIndex()) {
+func (st *ScopeTracker) CheckEnterScope(ctx antlr.ParserRuleContext) *Scope {
+	if st.shouldCreateScope(ctx.GetRuleIndex()) {
 		// Create new scope and add to stack
-		newScope := sv.createScope(sv.ScopeStack.Top(), ctx)
-		sv.ScopeStack.Push(newScope)
+		newScope := st.createScope(st.ScopeStack.Top(), ctx)
+		st.ScopeStack.Push(newScope)
 		return newScope
 	}
 	return nil
 }
 
-func (sv *ScopeTracker) CheckExitScope(ctx antlr.ParserRuleContext) *Scope {
-	if sv.shouldCreateScope(ctx.GetRuleIndex()) {
+func (st *ScopeTracker) CheckExitScope(ctx antlr.ParserRuleContext) *Scope {
+	if st.shouldCreateScope(ctx.GetRuleIndex()) {
 		// Pop top scope from the stack
-		return sv.ScopeStack.Pop()
+		return st.ScopeStack.Pop()
 	}
 	return nil
 }
 
-func (sv *ScopeTracker) shouldCreateScope(ruleType int) bool {
+func (st *ScopeTracker) CurrScopeName() string {
+	scopeNames := make([]string, 0, st.ScopeStack.Size())
+	for i := 0; i < st.ScopeStack.Size(); i++ {
+		scopeNames = append(scopeNames, st.ScopeStack.At(i).Name)
+	}
+	return strings.Join(scopeNames, ".")
+}
+
+func (st *ScopeTracker) shouldCreateScope(ruleType int) bool {
 	switch ruleType {
 	case javaparser.JavaParserRULE_classDeclaration:
 		return true
@@ -88,7 +97,7 @@ func (sv *ScopeTracker) shouldCreateScope(ruleType int) bool {
 	return false
 }
 
-func (sv *ScopeTracker) createScope(parent *Scope, ctx antlr.ParserRuleContext) *Scope {
+func (st *ScopeTracker) createScope(parent *Scope, ctx antlr.ParserRuleContext) *Scope {
 	ret := &Scope{
 		Bounds:   ParserRuleContextToBounds(ctx),
 		Parent:   parent,

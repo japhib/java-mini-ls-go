@@ -49,3 +49,12 @@ func (st *Stack[T]) TopMinus(offsetFromTop int) T {
 func (st *Stack[T]) Size() int {
 	return len(st.contents)
 }
+
+func (st *Stack[T]) At(idx int) T {
+	return st.contents[idx]
+}
+
+func (st *Stack[T]) Clear() {
+	// slice contents to length 0
+	st.contents = st.contents[:0]
+}

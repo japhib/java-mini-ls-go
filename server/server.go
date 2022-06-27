@@ -20,6 +20,7 @@ type JavaLS struct {
 
 	documentTextCache *util.SyncMap[string, protocol.TextDocumentItem]
 	symbols           *util.SyncMap[string, []*parse.CodeSymbol]
+	builtinTypes      map[string]*parse.JavaType
 
 	// Options
 	ReadStdlibTypes bool
@@ -31,6 +32,7 @@ func NewServer(ctx context.Context, logger *zap.Logger) *JavaLS {
 		log:               logger,
 		documentTextCache: util.NewSyncMap[string, protocol.TextDocumentItem](),
 		symbols:           util.NewSyncMap[string, []*parse.CodeSymbol](),
+		builtinTypes:      make(map[string]*parse.JavaType),
 	}
 }
 
@@ -48,7 +50,8 @@ func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams
 	j.log.Info("Initialize")
 
 	if j.ReadStdlibTypes {
-		_, err := parse.LoadBuiltinTypes()
+		var err error
+		j.builtinTypes, err = parse.LoadBuiltinTypes()
 		if err != nil {
 			j.log.Error(err.Error())
 			return nil, err

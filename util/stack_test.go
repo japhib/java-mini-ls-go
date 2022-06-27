@@ -39,3 +39,21 @@ func TestStack(t *testing.T) {
 	assert.Equal(t, 0, stack.Top())
 	assert.Equal(t, 0, stack.TopMinus(1))
 }
+
+func TestStack_Clear(t *testing.T) {
+	stack := NewStack[int]()
+
+	// stack is empty
+	assert.Equal(t, 0, stack.Size())
+	assert.Equal(t, 0, stack.Pop())
+
+	stack.Push(1)
+	stack.Push(2)
+	stack.Push(3)
+
+	assert.Equal(t, 3, stack.Size())
+	stack.Pop()
+	assert.Equal(t, 2, stack.Size())
+	stack.Clear()
+	assert.Equal(t, 0, stack.Size())
+}

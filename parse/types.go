@@ -25,11 +25,12 @@ var VisibilityTypeStrs = map[VisibilityType]string{
 type JavaTypeType int
 
 const (
-	JavaTypePrimitive JavaTypeType = iota
-	JavaTypeClass     JavaTypeType = iota
-	JavaTypeInterface JavaTypeType = iota
-	JavaTypeEnum      JavaTypeType = iota
-	JavaTypeRecord    JavaTypeType = iota
+	JavaTypePrimitive  JavaTypeType = iota
+	JavaTypeClass      JavaTypeType = iota
+	JavaTypeInterface  JavaTypeType = iota
+	JavaTypeEnum       JavaTypeType = iota
+	JavaTypeRecord     JavaTypeType = iota
+	JavaTypeAnnotation JavaTypeType = iota
 )
 
 var JavaTypeTypeStrs = map[JavaTypeType]string{
@@ -97,8 +98,9 @@ func (jm *JavaMethod) String() string {
 }
 
 type JavaArgument struct {
-	Name string
-	Type *JavaType
+	Name      string
+	Type      *JavaType
+	IsVarargs bool
 }
 
 func (ja *JavaArgument) String() string {

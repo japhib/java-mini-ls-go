@@ -13,13 +13,15 @@ import (
 	"time"
 )
 
+type TypeMap map[string]*JavaType
+
 // The actual built-in types map that we load into
-var builtinTypes map[string]*JavaType
+var builtinTypes TypeMap
 
 // The mutex is probably not necessary, but good to have just in case
 var builtinTypesMutex sync.Mutex
 
-func LoadBuiltinTypes() (map[string]*JavaType, error) {
+func LoadBuiltinTypes() (TypeMap, error) {
 	builtinTypesMutex.Lock()
 	defer builtinTypesMutex.Unlock()
 
@@ -89,7 +91,7 @@ func loadBuiltinTypesFromDisk() error {
 		return errors.Wrapf(err, "Error reading JSON from disk")
 	}
 
-	builtinTypes = make(map[string]*JavaType)
+	builtinTypes = make(TypeMap)
 
 	// add primitive types before we load the rest of the types
 	addPrimitiveTypes()
