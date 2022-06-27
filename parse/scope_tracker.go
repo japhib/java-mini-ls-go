@@ -2,60 +2,136 @@ package parse
 
 import (
 	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"java-mini-ls-go/javaparser"
+	"java-mini-ls-go/util"
 )
 
-type ScopeCreator[TScope any] interface {
-	ShouldCreateScope(ruleType int) bool
-	CreateScope(parent *TScope, ctx antlr.ParserRuleContext) *TScope
+type ScopeType int
+
+const (
+	ScopeTypeAnnotationType         ScopeType = iota
+	ScopeTypeClass                  ScopeType = iota
+	ScopeTypeConstructor            ScopeType = iota
+	ScopeTypeEnum                   ScopeType = iota
+	ScopeTypeGenericConstructor     ScopeType = iota
+	ScopeTypeGenericInterfaceMethod ScopeType = iota
+	ScopeTypeGenericMethod          ScopeType = iota
+	ScopeTypeInterface              ScopeType = iota
+	ScopeTypeInterfaceMethod        ScopeType = iota
+	ScopeTypeMethod                 ScopeType = iota
+	ScopeTypeRecord                 ScopeType = iota
+)
+
+type Scope struct {
+	// Name is the name of the scope
+	Name string
+	// Type is the type of the scope
+	Type ScopeType
+	// Bounds is the location in the code of this scope
+	Bounds Bounds
+	// Parent is the outer scope this one is nested under
+	Parent *Scope
+	// Children is a list of all scopes nested under this one
+	Children []*Scope
 }
 
-type ScopeTracker[TScope any] struct {
+type ScopeTracker struct {
 	// A stack of scopes
-	ScopeStack []*TScope
-	Creator    ScopeCreator[TScope]
+	ScopeStack util.Stack[*Scope]
 }
 
-func NewScopeTracker[TScope any](scopeCreator ScopeCreator[TScope]) *ScopeTracker[TScope] {
-	return &ScopeTracker[TScope]{
-		ScopeStack: []*TScope{},
-		Creator:    scopeCreator,
+func NewScopeTracker() *ScopeTracker {
+	return &ScopeTracker{
+		ScopeStack: util.NewStack[*Scope](),
 	}
 }
 
-func (sv *ScopeTracker[TScope]) CheckEnterScope(ctx antlr.ParserRuleContext) bool {
-	if sv.Creator.ShouldCreateScope(ctx.GetRuleIndex()) {
+func (sv *ScopeTracker) CheckEnterScope(ctx antlr.ParserRuleContext) *Scope {
+	if sv.shouldCreateScope(ctx.GetRuleIndex()) {
 		// Create new scope and add to stack
-		sv.ScopeStack = append(sv.ScopeStack, sv.Creator.CreateScope(sv.GetTopScope(), ctx))
-		return true
+		newScope := sv.createScope(sv.ScopeStack.Top(), ctx)
+		sv.ScopeStack.Push(newScope)
+		return newScope
 	}
-	return false
+	return nil
 }
 
-func (sv *ScopeTracker[TScope]) CheckExitScope(ctx antlr.ParserRuleContext) bool {
-	if sv.Creator.ShouldCreateScope(ctx.GetRuleIndex()) {
+func (sv *ScopeTracker) CheckExitScope(ctx antlr.ParserRuleContext) *Scope {
+	if sv.shouldCreateScope(ctx.GetRuleIndex()) {
 		// Pop top scope from the stack
-		sv.ScopeStack = sv.ScopeStack[:len(sv.ScopeStack)-1]
+		return sv.ScopeStack.Pop()
+	}
+	return nil
+}
+
+func (sv *ScopeTracker) shouldCreateScope(ruleType int) bool {
+	switch ruleType {
+	case javaparser.JavaParserRULE_classDeclaration:
+		return true
+	case javaparser.JavaParserRULE_methodDeclaration:
+		return true
+	case javaparser.JavaParserRULE_genericMethodDeclaration:
+		return true
+	case javaparser.JavaParserRULE_constructorDeclaration:
+		return true
+	case javaparser.JavaParserRULE_genericConstructorDeclaration:
+		return true
+	case javaparser.JavaParserRULE_interfaceDeclaration:
+		return true
+	case javaparser.JavaParserRULE_enumDeclaration:
+		return true
+	case javaparser.JavaParserRULE_annotationTypeDeclaration:
+		return true
+	case javaparser.JavaParserRULE_recordDeclaration:
 		return true
 	}
 	return false
 }
 
-func (sv *ScopeTracker[TScope]) GetTopScope() *TScope {
-	if len(sv.ScopeStack) == 0 {
-		return nil
+func (sv *ScopeTracker) createScope(parent *Scope, ctx antlr.ParserRuleContext) *Scope {
+	ret := &Scope{
+		Bounds:   ParserRuleContextToBounds(ctx),
+		Parent:   parent,
+		Children: make([]*Scope, 0),
 	}
 
-	return sv.ScopeStack[len(sv.ScopeStack)-1]
-}
-
-func (sv *ScopeTracker[TScope]) GetTopScopeMinus(offsetFromTop int) *TScope {
-	if len(sv.ScopeStack)-offsetFromTop <= 0 {
-		return nil
+	switch ctx.GetRuleIndex() {
+	case javaparser.JavaParserRULE_classDeclaration:
+		ret.Type = ScopeTypeClass
+		ret.Name = ctx.(*javaparser.ClassDeclarationContext).Identifier().GetText()
+	case javaparser.JavaParserRULE_methodDeclaration:
+		ret.Type = ScopeTypeMethod
+		ret.Name = ctx.(*javaparser.MethodDeclarationContext).Identifier().GetText()
+	case javaparser.JavaParserRULE_genericMethodDeclaration:
+		ret.Type = ScopeTypeGenericMethod
+		ret.Name = ctx.(*javaparser.GenericMethodDeclarationContext).MethodDeclaration().(*javaparser.MethodDeclarationContext).Identifier().GetText()
+	case javaparser.JavaParserRULE_interfaceMethodDeclaration:
+		ret.Type = ScopeTypeInterfaceMethod
+		body := ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext)
+		ret.Name = body.Identifier().GetText()
+	case javaparser.JavaParserRULE_genericInterfaceMethodDeclaration:
+		ret.Type = ScopeTypeGenericInterfaceMethod
+		body := ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext)
+		ret.Name = body.Identifier().GetText()
+	case javaparser.JavaParserRULE_constructorDeclaration:
+		ret.Type = ScopeTypeConstructor
+		ret.Name = ctx.(*javaparser.ConstructorDeclarationContext).Identifier().GetText()
+	case javaparser.JavaParserRULE_genericConstructorDeclaration:
+		ret.Type = ScopeTypeGenericConstructor
+		ret.Name = ctx.(*javaparser.GenericConstructorDeclarationContext).ConstructorDeclaration().(*javaparser.ConstructorDeclarationContext).Identifier().GetText()
+	case javaparser.JavaParserRULE_interfaceDeclaration:
+		ret.Type = ScopeTypeInterface
+		ret.Name = ctx.(*javaparser.InterfaceDeclarationContext).Identifier().GetText()
+	case javaparser.JavaParserRULE_enumDeclaration:
+		ret.Type = ScopeTypeEnum
+		ret.Name = ctx.(*javaparser.EnumDeclarationContext).Identifier().GetText()
+	case javaparser.JavaParserRULE_annotationTypeDeclaration:
+		ret.Type = ScopeTypeAnnotationType
+		ret.Name = ctx.(*javaparser.AnnotationTypeDeclarationContext).Identifier().GetText()
+	case javaparser.JavaParserRULE_recordDeclaration:
+		ret.Type = ScopeTypeRecord
+		ret.Name = ctx.(*javaparser.RecordDeclarationContext).Identifier().GetText()
 	}
 
-	return sv.ScopeStack[len(sv.ScopeStack)-1-offsetFromTop]
-}
-
-func (sv *ScopeTracker[TScope]) GetScopeCount() int {
-	return len(sv.ScopeStack)
+	return ret
 }

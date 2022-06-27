@@ -36,6 +36,20 @@ var CodeSymbolTypeNames = map[CodeSymbolType]string{
 	CodeSymbolVariable:    "Variable",
 }
 
+var ScopeTypesToCodeSymboltypes = map[ScopeType]CodeSymbolType{
+	ScopeTypeAnnotationType:         CodeSymbolClass,
+	ScopeTypeClass:                  CodeSymbolClass,
+	ScopeTypeConstructor:            CodeSymbolConstructor,
+	ScopeTypeEnum:                   CodeSymbolEnum,
+	ScopeTypeGenericConstructor:     CodeSymbolConstructor,
+	ScopeTypeGenericInterfaceMethod: CodeSymbolMethod,
+	ScopeTypeGenericMethod:          CodeSymbolMethod,
+	ScopeTypeInterface:              CodeSymbolInterface,
+	ScopeTypeInterfaceMethod:        CodeSymbolMethod,
+	ScopeTypeMethod:                 CodeSymbolMethod,
+	ScopeTypeRecord:                 CodeSymbolClass,
+}
+
 // CodeSymbol represents a single symbol inside a source file, whether it's a class, a method, a field, a variable, etc.
 type CodeSymbol struct {
 	// Name is the name of the symbol
@@ -48,13 +62,6 @@ type CodeSymbol struct {
 	Bounds Bounds
 	// Children is a list of all CodeSymbols nested under this one
 	Children []*CodeSymbol
-}
-
-func NewEmptyCodeSymbol(fromRule antlr.ParserRuleContext) *CodeSymbol {
-	return &CodeSymbol{
-		Bounds:   ParserRuleContextToBounds(fromRule),
-		Children: make([]*CodeSymbol, 0),
-	}
 }
 
 func NewCodeSymbol(name string, ttype CodeSymbolType, fromRule antlr.ParserRuleContext) *CodeSymbol {
@@ -72,10 +79,8 @@ func NewCodeSymbol(name string, ttype CodeSymbolType, fromRule antlr.ParserRuleC
 	}
 }
 
-func NewCodeSymbolWithDetail(name string, ttype CodeSymbolType, fromRule antlr.ParserRuleContext, detail string) *CodeSymbol {
-	ret := NewCodeSymbol(name, ttype, fromRule)
-	ret.Detail = detail
-	return ret
+func (cs *CodeSymbol) AddChild(symbol *CodeSymbol) {
+	cs.Children = append(cs.Children, symbol)
 }
 
 func (cs *CodeSymbol) stringRecursive(recursionLevel int) string {
@@ -94,114 +99,32 @@ func (cs *CodeSymbol) String() string {
 	return cs.stringRecursive(1)
 }
 
-// FindSymbols is the entrypoint for finding symbols in a source file
+// FindSymbols is the entrypoint for finding topLevelSymbols in a source file
 func FindSymbols(tree antlr.Tree) []*CodeSymbol {
 	visitor := &symbolVisitor{
-		scopeTracker: NewScopeTracker[CodeSymbol](&symbolScopeCreator{}),
-		symbols:      make([]*CodeSymbol, 0),
+		scopeTracker:    NewScopeTracker(),
+		topLevelSymbols: make([]*CodeSymbol, 0),
+		symbolStack:     util.NewStack[*CodeSymbol](),
 	}
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
-	return visitor.symbols
-}
-
-type symbolScopeCreator struct{}
-
-var _ ScopeCreator[CodeSymbol] = (*symbolScopeCreator)(nil)
-
-func (sc *symbolScopeCreator) ShouldCreateScope(ruleType int) bool {
-	switch ruleType {
-	case javaparser.JavaParserRULE_classDeclaration:
-		return true
-	case javaparser.JavaParserRULE_methodDeclaration:
-		return true
-	case javaparser.JavaParserRULE_genericMethodDeclaration:
-		return true
-	case javaparser.JavaParserRULE_constructorDeclaration:
-		return true
-	case javaparser.JavaParserRULE_genericConstructorDeclaration:
-		return true
-	case javaparser.JavaParserRULE_interfaceDeclaration:
-		return true
-	case javaparser.JavaParserRULE_enumDeclaration:
-		return true
-	case javaparser.JavaParserRULE_annotationTypeDeclaration:
-		return true
-	case javaparser.JavaParserRULE_recordDeclaration:
-		return true
-	}
-	return false
-}
-
-func (sc *symbolScopeCreator) CreateScope(_ *CodeSymbol, ctx antlr.ParserRuleContext) *CodeSymbol {
-	ret := NewEmptyCodeSymbol(ctx)
-
-	switch ctx.GetRuleIndex() {
-	case javaparser.JavaParserRULE_classDeclaration:
-		ret.Type = CodeSymbolClass
-		ret.Name = ctx.(*javaparser.ClassDeclarationContext).Identifier().GetText()
-	case javaparser.JavaParserRULE_methodDeclaration:
-		ret.Type = CodeSymbolMethod
-		ret.Name = ctx.(*javaparser.MethodDeclarationContext).Identifier().GetText()
-	case javaparser.JavaParserRULE_genericMethodDeclaration:
-		ret.Type = CodeSymbolMethod
-		ret.Name = ctx.(*javaparser.GenericMethodDeclarationContext).MethodDeclaration().(*javaparser.MethodDeclarationContext).Identifier().GetText()
-	case javaparser.JavaParserRULE_interfaceMethodDeclaration:
-		ret.Type = CodeSymbolMethod
-		body := ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext)
-		ret.Name = body.Identifier().GetText()
-	case javaparser.JavaParserRULE_genericInterfaceMethodDeclaration:
-		ret.Type = CodeSymbolMethod
-		body := ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext)
-		ret.Name = body.Identifier().GetText()
-	case javaparser.JavaParserRULE_constructorDeclaration:
-		ret.Type = CodeSymbolConstructor
-		ret.Name = ctx.(*javaparser.ConstructorDeclarationContext).Identifier().GetText()
-	case javaparser.JavaParserRULE_genericConstructorDeclaration:
-		ret.Type = CodeSymbolConstructor
-		ret.Name = ctx.(*javaparser.GenericConstructorDeclarationContext).ConstructorDeclaration().(*javaparser.ConstructorDeclarationContext).Identifier().GetText()
-	case javaparser.JavaParserRULE_interfaceDeclaration:
-		ret.Type = CodeSymbolInterface
-		ret.Name = ctx.(*javaparser.InterfaceDeclarationContext).Identifier().GetText()
-	case javaparser.JavaParserRULE_enumDeclaration:
-		ret.Type = CodeSymbolEnum
-		ret.Name = ctx.(*javaparser.EnumDeclarationContext).Identifier().GetText()
-	case javaparser.JavaParserRULE_annotationTypeDeclaration:
-		ret.Type = CodeSymbolClass
-		ret.Name = ctx.(*javaparser.AnnotationTypeDeclarationContext).Identifier().GetText()
-	case javaparser.JavaParserRULE_recordDeclaration:
-		ret.Type = CodeSymbolClass
-		ret.Name = ctx.(*javaparser.RecordDeclarationContext).Identifier().GetText()
-	}
-
-	return ret
+	return visitor.topLevelSymbols
 }
 
 type symbolVisitor struct {
 	javaparser.BaseJavaParserListener
-	scopeTracker *ScopeTracker[CodeSymbol]
-	symbols      []*CodeSymbol
+	scopeTracker    *ScopeTracker
+	topLevelSymbols []*CodeSymbol
+	symbolStack     util.Stack[*CodeSymbol]
 }
 
 var _ javaparser.JavaParserListener = (*symbolVisitor)(nil)
 
-func (s *symbolVisitor) addSymbolToPreviousScope(symbol *CodeSymbol) {
-	scopeCount := s.scopeTracker.GetScopeCount()
-	if scopeCount <= 1 {
-		// Add to top level
-		s.symbols = append(s.symbols, symbol)
-	} else {
-		// Add to the previous top scope
-		secondToTop := s.scopeTracker.GetTopScopeMinus(1)
-		secondToTop.Children = append(secondToTop.Children, symbol)
-	}
-}
-
 func (s *symbolVisitor) addSymbol(symbol *CodeSymbol) {
-	topScope := s.scopeTracker.GetTopScope()
-	if topScope != nil {
-		topScope.Children = append(topScope.Children, symbol)
+	topSymbol := s.symbolStack.Top()
+	if topSymbol != nil {
+		topSymbol.AddChild(symbol)
 	} else {
-		s.symbols = append(s.symbols, symbol)
+		s.topLevelSymbols = append(s.topLevelSymbols, symbol)
 	}
 }
 
@@ -211,14 +134,19 @@ func (s *symbolVisitor) addNewSymbol(name string, ttype CodeSymbolType, ctx antl
 }
 
 func (s *symbolVisitor) EnterEveryRule(ctx antlr.ParserRuleContext) {
-	if s.scopeTracker.CheckEnterScope(ctx) {
-		newScope := s.scopeTracker.GetTopScope()
-		s.addSymbolToPreviousScope(newScope)
+	newScope := s.scopeTracker.CheckEnterScope(ctx)
+	if newScope != nil {
+		symbolForNewScope := NewCodeSymbol(newScope.Name, ScopeTypesToCodeSymboltypes[newScope.Type], ctx)
+		s.addSymbol(symbolForNewScope)
+		s.symbolStack.Push(symbolForNewScope)
 	}
 }
 
 func (s *symbolVisitor) ExitEveryRule(ctx antlr.ParserRuleContext) {
-	s.scopeTracker.CheckExitScope(ctx)
+	oldScope := s.scopeTracker.CheckExitScope(ctx)
+	if oldScope != nil {
+		s.symbolStack.Pop()
+	}
 }
 
 // EnterPackageDeclaration is called when production packageDeclaration is entered.

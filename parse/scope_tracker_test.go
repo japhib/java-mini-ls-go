@@ -8,36 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type scope1 struct {
-	name string
-}
-
-type scopeCreator1 struct{}
-
-var _ ScopeCreator[scope1] = (*scopeCreator1)(nil)
-
-func (sc *scopeCreator1) ShouldCreateScope(ruleType int) bool {
-	switch ruleType {
-	case javaparser.JavaParserRULE_classDeclaration:
-		return true
-	}
-	return false
-}
-
-func (sc *scopeCreator1) CreateScope(ctx antlr.ParserRuleContext) *scope1 {
-	ret := &scope1{}
-
-	switch ctx.GetRuleIndex() {
-	case javaparser.JavaParserRULE_classDeclaration:
-		ret.name = ctx.(*javaparser.ClassDeclarationContext).Identifier().GetText()
-	}
-
-	return ret
-}
-
 type scopedVisitor1 struct {
 	javaparser.BaseJavaParserListener
-	scopeTracker *ScopeTracker[scope1]
+	scopeTracker *ScopeTracker
 	t            *testing.T
 }
 
@@ -60,8 +33,8 @@ func (s *scopedVisitor1) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationC
 	assert.Equal(s.t, "asdf", varName)
 
 	scopes := s.scopeTracker.ScopeStack
-	assert.Equal(s.t, "MyClass", scopes[0].name)
-	assert.Equal(s.t, "Nested", scopes[1].name)
+	assert.Equal(s.t, "MyClass", scopes.TopMinus(1).Name)
+	assert.Equal(s.t, "Nested", scopes.Top().Name)
 }
 
 func TestScopedVisitor(t *testing.T) {
@@ -74,10 +47,10 @@ class MyClass{
 	assert.Equal(t, 0, len(errors))
 
 	visitor := scopedVisitor1{
-		scopeTracker: NewScopeTracker[scope1](&scopeCreator1{}),
+		scopeTracker: NewScopeTracker(),
 		t:            t,
 	}
 	antlr.ParseTreeWalkerDefault.Walk(&visitor, tree)
 
-	assert.Equal(t, 0, len(visitor.scopeTracker.ScopeStack))
+	assert.Equal(t, 0, visitor.scopeTracker.ScopeStack.Size())
 }

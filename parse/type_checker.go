@@ -1,19 +1,5 @@
 package parse
 
-type ScopeType int
-
-const (
-	ScopeTypeAnnotationTypeDeclaration     ScopeType = iota
-	ScopeTypeClassDeclaration              ScopeType = iota
-	ScopeTypeConstructorDeclaration        ScopeType = iota
-	ScopeTypeEnumDeclaration               ScopeType = iota
-	ScopeTypeGenericConstructorDeclaration ScopeType = iota
-	ScopeTypeGenericMethodDeclaration      ScopeType = iota
-	ScopeTypeInterfaceDeclaration          ScopeType = iota
-	ScopeTypeMethodDeclaration             ScopeType = iota
-	ScopeTypeRecordDeclaration             ScopeType = iota
-)
-
 type TypeCheckingScope struct {
 	Type ScopeType
 
