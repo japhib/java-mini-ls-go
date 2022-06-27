@@ -104,13 +104,13 @@ class MyClass {
 	types := GatherTypes(tree, builtins)
 
 	nestedType := &JavaType{
-		Name:   "Nested",
-		Type:   JavaTypeClass,
+		Name: "Nested",
+		Type: JavaTypeClass,
 		Fields: map[string]*JavaField{
-			//"nestedInt": {
-			//	Name: "nestedInt",
-			//	Type: intType,
-			//},
+			"nestedInt": {
+				Name: "nestedInt",
+				Type: intType,
+			},
 		},
 		Constructors: []*JavaConstructor{},
 		Methods:      map[string]*JavaMethod{},
@@ -118,20 +118,20 @@ class MyClass {
 
 	expectedTypes := TypeMap{
 		"MyClass": {
-			Name:   "MyClass",
+			Name: "MyClass",
 			Fields: map[string]*JavaField{
-				//"name": {
-				//	Name: "name",
-				//	Type: strType,
-				//},
-				//"asdf": {
-				//	Name: "asdf",
-				//	Type: intType,
-				//},
-				//"n": {
-				//	Name: "n",
-				//	Type: nestedType,
-				//},
+				"name": {
+					Name: "name",
+					Type: strType,
+				},
+				"asdf": {
+					Name: "asdf",
+					Type: intType,
+				},
+				"n": {
+					Name: "n",
+					Type: nestedType,
+				},
 			},
 			Constructors: []*JavaConstructor{
 				{

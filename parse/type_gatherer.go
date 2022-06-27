@@ -97,6 +97,8 @@ func (tg *typeGatherer) EnterPackageDeclaration(ctx *javaparser.PackageDeclarati
 // EnterClassBodyDeclaration is called when production classBodyDeclaration is entered.
 func (tg *typeGatherer) EnterClassBodyDeclaration(ctx *javaparser.ClassBodyDeclarationContext) {
 	if ctx.STATIC() != nil {
+		// TODO is it possible for class body declarations to be nested? In that case this would
+		// need to be a stack instead of a single bool
 		tg.currentMemberIsStatic = true
 	}
 }
@@ -107,6 +109,29 @@ func (tg *typeGatherer) ExitClassBodyDeclaration(ctx *javaparser.ClassBodyDeclar
 		// If this is true, we set currentMemberIsStatic to true on the way in.
 		// So we want to make sure to set it to false on the way out.
 		tg.currentMemberIsStatic = false
+	}
+}
+
+// EnterFieldDeclaration is called when production fieldDeclaration is entered.
+func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationContext) {
+	currTypeName := tg.scopeTracker.ScopeStack.Top().Name
+	currType := tg.types[currTypeName]
+
+	fieldTypeName := ctx.TypeType().GetText()
+	fieldType := tg.lookupType(fieldTypeName)
+
+	varDeclsI := ctx.VariableDeclarators()
+	if varDeclsI != nil {
+		varDecls := varDeclsI.(*javaparser.VariableDeclaratorsContext)
+		for _, varDecl := range varDecls.AllVariableDeclarator() {
+			field := &JavaField{
+				Name:     varDecl.GetText(),
+				Type:     fieldType,
+				IsStatic: tg.currentMemberIsStatic,
+			}
+
+			currType.Fields[field.Name] = field
+		}
 	}
 }
 
@@ -155,12 +180,7 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *Scope, ctx antlr.ParserRule
 		}
 
 		method.Arguments = tg.getArgsFromContext(tctx)
-
 		method.IsStatic = tg.currentMemberIsStatic
-		// Consume currentMemberIsStatic so that it doesn't get re-used if there are
-		// nested ClassBodyDeclarations (e.g. anonymous class maybe? Might happen with
-		// a regular nested class as well.)
-		tg.currentMemberIsStatic = false
 	}
 
 	currType.Methods[method.Name] = method
