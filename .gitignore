@@ -4,3 +4,4 @@ node_modules/
 out/
 .antlr/
 java_sdk_cache/
+*.out

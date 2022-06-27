@@ -20,15 +20,23 @@ type JavaLS struct {
 
 	documentTextCache *util.SyncMap[string, protocol.TextDocumentItem]
 	symbols           *util.SyncMap[string, []*parse.CodeSymbol]
+
+	// Options
+	ReadStdlibTypes bool
 }
 
-func RunServer(ctx context.Context, logger *zap.Logger, stream jsonrpc2.Stream) (context.Context, jsonrpc2.Conn, protocol.Client) {
-	jls := &JavaLS{
+func NewServer(ctx context.Context, logger *zap.Logger) *JavaLS {
+	return &JavaLS{
 		ctx:               ctx,
 		log:               logger,
 		documentTextCache: util.NewSyncMap[string, protocol.TextDocumentItem](),
 		symbols:           util.NewSyncMap[string, []*parse.CodeSymbol](),
 	}
+}
+
+func RunServer(ctx context.Context, logger *zap.Logger, stream jsonrpc2.Stream) (context.Context, jsonrpc2.Conn, protocol.Client) {
+	jls := NewServer(ctx, logger)
+	jls.ReadStdlibTypes = true
 
 	ctx, conn, client := protocol.NewServer(ctx, jls, stream, jls.log.Named("client"))
 	jls.client = client
@@ -36,12 +44,15 @@ func RunServer(ctx context.Context, logger *zap.Logger, stream jsonrpc2.Stream) 
 	return ctx, conn, client
 }
 
-func (j *JavaLS) Initialize(ctx context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
+func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
 	j.log.Info("Initialize")
 
-	_, err := parse.LoadBuiltinTypes()
-	if err != nil {
-		j.log.Error(err.Error())
+	if j.ReadStdlibTypes {
+		_, err := parse.LoadBuiltinTypes()
+		if err != nil {
+			j.log.Error(err.Error())
+			return nil, err
+		}
 	}
 
 	return &protocol.InitializeResult{
@@ -61,26 +72,26 @@ func (j *JavaLS) Initialize(ctx context.Context, params *protocol.InitializePara
 	}, nil
 }
 
-func (j *JavaLS) Initialized(ctx context.Context, params *protocol.InitializedParams) error {
+func (j *JavaLS) Initialized(_ context.Context, params *protocol.InitializedParams) error {
 	j.log.Info("Initialized")
 	return nil
 }
 
-func (j *JavaLS) Shutdown(ctx context.Context) error {
+func (j *JavaLS) Shutdown(_ context.Context) error {
 	return nil
 }
 
-func (j *JavaLS) Exit(ctx context.Context) error {
+func (j *JavaLS) Exit(_ context.Context) error {
 	return nil
 }
 
-func (j *JavaLS) DidOpen(ctx context.Context, params *protocol.DidOpenTextDocumentParams) error {
+func (j *JavaLS) DidOpen(_ context.Context, params *protocol.DidOpenTextDocumentParams) error {
 	j.log.Info(fmt.Sprintf("DidOpen %s", params.TextDocument.URI))
 	j.parseTextDocument(params.TextDocument)
 	return nil
 }
 
-func (j *JavaLS) DidChange(ctx context.Context, params *protocol.DidChangeTextDocumentParams) error {
+func (j *JavaLS) DidChange(_ context.Context, params *protocol.DidChangeTextDocumentParams) error {
 	j.log.Info(fmt.Sprintf("DidChange %s", params.TextDocument.URI))
 	item := protocol.TextDocumentItem{
 		URI:     params.TextDocument.URI,
@@ -115,7 +126,6 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	}
 
 	symbols := parse.FindSymbols(parsed)
-	//fmt.Println("symbols:", symbols)
 	j.symbols.Set(uriString, symbols)
 }
 
@@ -150,20 +160,18 @@ func convertToDocumentSymbols(codeSymbols []*parse.CodeSymbol) []protocol.Docume
 	return ret
 }
 
-func (j *JavaLS) DocumentSymbol(ctx context.Context, params *protocol.DocumentSymbolParams) ([]interface{}, error) {
+func (j *JavaLS) DocumentSymbol(_ context.Context, params *protocol.DocumentSymbolParams) ([]interface{}, error) {
 	ret := make([]interface{}, 0)
 
 	symbols, _ := j.symbols.Get((string)(params.TextDocument.URI))
 
 	if symbols != nil {
 		docSymbols := convertToDocumentSymbols(symbols)
-		ret = make([]interface{}, len(docSymbols))
+		ret = make([]interface{}, 0, len(docSymbols))
 		for _, ds := range docSymbols {
 			ret = append(ret, ds)
 		}
 	}
-
-	//fmt.Println("ret: ", ret)
 
 	return ret, nil
 }
