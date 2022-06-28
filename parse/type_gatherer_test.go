@@ -61,6 +61,8 @@ public class Main {
 			Constructors: []*JavaConstructor{},
 			Fields:       map[string]*JavaField{},
 			Type:         JavaTypeClass,
+			Extends:      []*JavaType{},
+			Implements:   []*JavaType{},
 		},
 	}
 
@@ -114,6 +116,8 @@ class MyClass {
 		},
 		Constructors: []*JavaConstructor{},
 		Methods:      map[string]*JavaMethod{},
+		Extends:      []*JavaType{},
+		Implements:   []*JavaType{},
 	}
 
 	expectedTypes := TypeMap{
@@ -150,7 +154,9 @@ class MyClass {
 					Params:     []*JavaParameter{},
 				},
 			},
-			Type: JavaTypeClass,
+			Type:       JavaTypeClass,
+			Extends:    []*JavaType{},
+			Implements: []*JavaType{},
 		},
 		"Nested": nestedType,
 	}

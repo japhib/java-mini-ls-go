@@ -137,6 +137,48 @@ func (tc *typeChecker) ExitEveryRule(ctx antlr.ParserRuleContext) {
 	}
 }
 
+func (tc *typeChecker) ExitStatement(ctx *javaparser.StatementContext) {
+	// zero out the expression stack when we leave a statement
+	tc.expressionStack.Clear()
+}
+
+func (tc *typeChecker) ExitBlockStatement(ctx *javaparser.BlockStatementContext) {
+	// zero out the expression stack when we leave a statement
+	tc.expressionStack.Clear()
+}
+
+func (tc *typeChecker) ExitLocalVariableDeclaration(ctx *javaparser.LocalVariableDeclarationContext) {
+	if ctx.VAR() == nil {
+		tc.handleTypedLocalVariableDecl(ctx)
+	} else {
+		tc.handleUntypedLocalVariableDecl(ctx)
+	}
+}
+
+// e.g. `String a = "hi"`
+func (tc *typeChecker) handleTypedLocalVariableDecl(ctx *javaparser.LocalVariableDeclarationContext) {
+	ttype := tc.lookupType(ctx.TypeType().GetText())
+	currTypeScope := tc.typeScopes.Top()
+
+	// There can be multiple variable declarators
+	varDecls := ctx.VariableDeclarators().(*javaparser.VariableDeclaratorsContext).AllVariableDeclarator()
+	for _, varDeclI := range varDecls {
+		varDecl := varDeclI.(*javaparser.VariableDeclaratorContext)
+
+		varName := varDecl.VariableDeclaratorId().(*javaparser.VariableDeclaratorIdContext).Identifier().GetText()
+		currTypeScope.addLocal(varName, ttype)
+	}
+}
+
+// e.g. `var a = "hi"`
+func (tc *typeChecker) handleUntypedLocalVariableDecl(ctx *javaparser.LocalVariableDeclarationContext) {
+	// In order for type to be inferred, we must have already pushed the expression type
+	ttype := tc.expressionStack.Pop().ttype
+
+	currTypeScope := tc.typeScopes.Top()
+	currTypeScope.addLocal(ctx.Identifier().GetText(), ttype)
+}
+
 func (tc *typeChecker) ExitPrimary(ctx *javaparser.PrimaryContext) {
 	literal := ctx.Literal()
 	if literal != nil {

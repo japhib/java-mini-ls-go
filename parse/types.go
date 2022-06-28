@@ -65,20 +65,18 @@ type JavaType struct {
 }
 
 func (jt *JavaType) LookupField(name string) *JavaField {
-	curr := jt
-	for curr != nil {
-		if field, ok := jt.Fields[name]; ok {
+	if field, ok := jt.Fields[name]; ok {
+		return field
+	}
+
+	// Go to parent class/interfaces and see if any of them have the field
+	for _, supertype := range jt.Extends {
+		field := supertype.LookupField(name)
+		if field != nil {
 			return field
 		}
-
-		// Go to parent class/interfaces and see if any of them have the field
-		for _, supertype := range curr.Extends {
-			field := supertype.LookupField(name)
-			if field != nil {
-				return field
-			}
-		}
 	}
+
 	// Not found
 	return nil
 }

@@ -79,3 +79,15 @@ public class MainClass extends Parent {
 }`)
 	assert.Equal(t, []TypeError{}, typeErrors)
 }
+
+func TestCheckTypes_LocalVars(t *testing.T) {
+	typeErrors := parseAndTypeCheck(t, `
+public class MainClass {
+	public int add() {
+		int a = 1;
+		char b = a;
+		return a + 1;
+	}
+}`)
+	assert.Equal(t, []TypeError{}, typeErrors)
+}
