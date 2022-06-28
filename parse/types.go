@@ -34,10 +34,12 @@ const (
 )
 
 var JavaTypeTypeStrs = map[JavaTypeType]string{
-	JavaTypeClass:     "class",
-	JavaTypeInterface: "interface",
-	JavaTypeEnum:      "enum",
-	JavaTypeRecord:    "record",
+	JavaTypePrimitive:  "primitive",
+	JavaTypeClass:      "class",
+	JavaTypeInterface:  "interface",
+	JavaTypeEnum:       "enum",
+	JavaTypeRecord:     "record",
+	JavaTypeAnnotation: "annotation",
 }
 
 func getStaticStr(isStatic bool) string {
@@ -83,6 +85,12 @@ func (jt *JavaType) LookupField(name string) *JavaField {
 
 func (jt *JavaType) String() string {
 	return fmt.Sprintf("%s %s %s", VisibilityTypeStrs[jt.Visibility], JavaTypeTypeStrs[jt.Type], jt.Name)
+}
+
+// CoercesTo says whether a type can be converted to another type without a type cast.
+func (jt *JavaType) CoercesTo(other *JavaType) bool {
+	return jt == other
+	// TODO check whether jt is a subclass of other
 }
 
 type JavaField struct {

@@ -50,6 +50,10 @@ func (st *Stack[T]) Size() int {
 	return len(st.contents)
 }
 
+func (st *Stack[T]) Empty() bool {
+	return st.Size() == 0
+}
+
 func (st *Stack[T]) At(idx int) T {
 	return st.contents[idx]
 }
@@ -57,4 +61,9 @@ func (st *Stack[T]) At(idx int) T {
 func (st *Stack[T]) Clear() {
 	// slice contents to length 0
 	st.contents = st.contents[:0]
+}
+
+// Values returns a shallow copy of the contents of the stack
+func (st *Stack[T]) Values() []T {
+	return Map(st.contents, func(t T) T { return t })
 }

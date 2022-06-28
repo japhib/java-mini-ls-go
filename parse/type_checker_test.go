@@ -80,14 +80,71 @@ public class MainClass extends Parent {
 	assert.Equal(t, []TypeError{}, typeErrors)
 }
 
-func TestCheckTypes_LocalVars(t *testing.T) {
+func TestCheckTypes_AddsLocalVars(t *testing.T) {
 	typeErrors := parseAndTypeCheck(t, `
 public class MainClass {
 	public int add() {
 		int a = 1;
-		char b = a;
 		return a + 1;
 	}
 }`)
 	assert.Equal(t, []TypeError{}, typeErrors)
+}
+
+func TestCheckTypes_CheckLocalVars(t *testing.T) {
+	typeErrors := parseAndTypeCheck(t, `
+public class MainClass {
+	int a = 1, b = 2, c = 3;
+
+	public void add() {
+		int d = 4, e = 5, f = 6;
+	}
+}`)
+	assert.Equal(t, []TypeError{}, typeErrors)
+}
+
+func TestCheckTypes_CheckFieldVars_Errors(t *testing.T) {
+	typeErrors := parseAndTypeCheck(t, `
+public class MainClass {
+	int a = 1, b = "hi";
+}`)
+	assert.Equal(t, []TypeError{
+		{
+			Loc: Bounds{
+				Start: FileLocation{
+					Line:   3,
+					Column: 16,
+				},
+				End: FileLocation{
+					Line:   3,
+					Column: 16,
+				},
+			},
+			Message: "Expected expression of type int, instead got String",
+		},
+	}, typeErrors)
+}
+
+func TestCheckTypes_CheckLocalVars_Errors(t *testing.T) {
+	typeErrors := parseAndTypeCheck(t, `
+public class MainClass {
+	public void add() {
+		String c = "f", a = 5;
+	}
+}`)
+	assert.Equal(t, []TypeError{
+		{
+			Loc: Bounds{
+				Start: FileLocation{
+					Line:   4,
+					Column: 22,
+				},
+				End: FileLocation{
+					Line:   4,
+					Column: 22,
+				},
+			},
+			Message: "Expected expression of type String, instead got int",
+		},
+	}, typeErrors)
 }

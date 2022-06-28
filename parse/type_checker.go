@@ -30,6 +30,11 @@ func CheckTypes(tree antlr.Tree, userTypes TypeMap, builtins TypeMap) []TypeErro
 	return visitor.errors
 }
 
+type typedDeclarationCtx interface {
+	TypeType() javaparser.ITypeTypeContext
+	VariableDeclarators() javaparser.IVariableDeclaratorsContext
+}
+
 type localVar struct {
 	name  string
 	ttype *JavaType
@@ -55,6 +60,10 @@ func (tcs *typeCheckingScope) addLocal(name string, ttype *JavaType) {
 type typedExpression struct {
 	loc   Bounds
 	ttype *JavaType
+}
+
+func (te typedExpression) String() string {
+	return fmt.Sprintf("loc=%v type=%v", te.loc, te.ttype)
 }
 
 type typeChecker struct {
@@ -137,26 +146,30 @@ func (tc *typeChecker) ExitEveryRule(ctx antlr.ParserRuleContext) {
 	}
 }
 
-func (tc *typeChecker) ExitStatement(ctx *javaparser.StatementContext) {
+func (tc *typeChecker) ExitStatement(_ *javaparser.StatementContext) {
 	// zero out the expression stack when we leave a statement
 	tc.expressionStack.Clear()
 }
 
-func (tc *typeChecker) ExitBlockStatement(ctx *javaparser.BlockStatementContext) {
+func (tc *typeChecker) ExitBlockStatement(_ *javaparser.BlockStatementContext) {
 	// zero out the expression stack when we leave a statement
 	tc.expressionStack.Clear()
+}
+
+func (tc *typeChecker) ExitFieldDeclaration(ctx *javaparser.FieldDeclarationContext) {
+	tc.handleTypedVariableDecl(ctx)
 }
 
 func (tc *typeChecker) ExitLocalVariableDeclaration(ctx *javaparser.LocalVariableDeclarationContext) {
 	if ctx.VAR() == nil {
-		tc.handleTypedLocalVariableDecl(ctx)
+		tc.handleTypedVariableDecl(ctx)
 	} else {
 		tc.handleUntypedLocalVariableDecl(ctx)
 	}
 }
 
 // e.g. `String a = "hi"`
-func (tc *typeChecker) handleTypedLocalVariableDecl(ctx *javaparser.LocalVariableDeclarationContext) {
+func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx) {
 	ttype := tc.lookupType(ctx.TypeType().GetText())
 	currTypeScope := tc.typeScopes.Top()
 
@@ -167,6 +180,18 @@ func (tc *typeChecker) handleTypedLocalVariableDecl(ctx *javaparser.LocalVariabl
 
 		varName := varDecl.VariableDeclaratorId().(*javaparser.VariableDeclaratorIdContext).Identifier().GetText()
 		currTypeScope.addLocal(varName, ttype)
+	}
+
+	// Make sure every value in the expression stack (which is the value of all the initializer expressions
+	// for these local vars) coerces to the type declared.
+	for !tc.expressionStack.Empty() {
+		expr := tc.expressionStack.Pop()
+		if !expr.ttype.CoercesTo(ttype) {
+			tc.addError(TypeError{
+				Loc:     expr.loc,
+				Message: fmt.Sprintf("Expected expression of type %s, instead got %s", ttype.Name, expr.ttype.Name),
+			})
+		}
 	}
 }
 
