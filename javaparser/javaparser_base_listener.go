@@ -1,6 +1,6 @@
 // Code generated from JavaParser.g4 by ANTLR 4.10.1. DO NOT EDIT.
 
-package javaparser // JavaParser
+package parser // JavaParser
 
 import "github.com/antlr/antlr4/runtime/Go/antlr"
 
@@ -69,6 +69,26 @@ func (s *BaseJavaParserListener) EnterClassDeclaration(ctx *ClassDeclarationCont
 
 // ExitClassDeclaration is called when production classDeclaration is exited.
 func (s *BaseJavaParserListener) ExitClassDeclaration(ctx *ClassDeclarationContext) {}
+
+// EnterClassDeclarationExtends is called when production classDeclarationExtends is entered.
+func (s *BaseJavaParserListener) EnterClassDeclarationExtends(ctx *ClassDeclarationExtendsContext) {}
+
+// ExitClassDeclarationExtends is called when production classDeclarationExtends is exited.
+func (s *BaseJavaParserListener) ExitClassDeclarationExtends(ctx *ClassDeclarationExtendsContext) {}
+
+// EnterClassDeclarationImplements is called when production classDeclarationImplements is entered.
+func (s *BaseJavaParserListener) EnterClassDeclarationImplements(ctx *ClassDeclarationImplementsContext) {
+}
+
+// ExitClassDeclarationImplements is called when production classDeclarationImplements is exited.
+func (s *BaseJavaParserListener) ExitClassDeclarationImplements(ctx *ClassDeclarationImplementsContext) {
+}
+
+// EnterClassDeclarationPermits is called when production classDeclarationPermits is entered.
+func (s *BaseJavaParserListener) EnterClassDeclarationPermits(ctx *ClassDeclarationPermitsContext) {}
+
+// ExitClassDeclarationPermits is called when production classDeclarationPermits is exited.
+func (s *BaseJavaParserListener) ExitClassDeclarationPermits(ctx *ClassDeclarationPermitsContext) {}
 
 // EnterTypeParameters is called when production typeParameters is entered.
 func (s *BaseJavaParserListener) EnterTypeParameters(ctx *TypeParametersContext) {}

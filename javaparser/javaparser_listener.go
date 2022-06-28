@@ -1,6 +1,6 @@
 // Code generated from JavaParser.g4 by ANTLR 4.10.1. DO NOT EDIT.
 
-package javaparser // JavaParser
+package parser // JavaParser
 
 import "github.com/antlr/antlr4/runtime/Go/antlr"
 
@@ -31,6 +31,15 @@ type JavaParserListener interface {
 
 	// EnterClassDeclaration is called when entering the classDeclaration production.
 	EnterClassDeclaration(c *ClassDeclarationContext)
+
+	// EnterClassDeclarationExtends is called when entering the classDeclarationExtends production.
+	EnterClassDeclarationExtends(c *ClassDeclarationExtendsContext)
+
+	// EnterClassDeclarationImplements is called when entering the classDeclarationImplements production.
+	EnterClassDeclarationImplements(c *ClassDeclarationImplementsContext)
+
+	// EnterClassDeclarationPermits is called when entering the classDeclarationPermits production.
+	EnterClassDeclarationPermits(c *ClassDeclarationPermitsContext)
 
 	// EnterTypeParameters is called when entering the typeParameters production.
 	EnterTypeParameters(c *TypeParametersContext)
@@ -403,6 +412,15 @@ type JavaParserListener interface {
 
 	// ExitClassDeclaration is called when exiting the classDeclaration production.
 	ExitClassDeclaration(c *ClassDeclarationContext)
+
+	// ExitClassDeclarationExtends is called when exiting the classDeclarationExtends production.
+	ExitClassDeclarationExtends(c *ClassDeclarationExtendsContext)
+
+	// ExitClassDeclarationImplements is called when exiting the classDeclarationImplements production.
+	ExitClassDeclarationImplements(c *ClassDeclarationImplementsContext)
+
+	// ExitClassDeclarationPermits is called when exiting the classDeclarationPermits production.
+	ExitClassDeclarationPermits(c *ClassDeclarationPermitsContext)
 
 	// ExitTypeParameters is called when exiting the typeParameters production.
 	ExitTypeParameters(c *TypeParametersContext)
