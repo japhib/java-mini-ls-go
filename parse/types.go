@@ -52,11 +52,28 @@ type JavaType struct {
 	Name         string
 	Package      string
 	Module       string
+	Extends      *JavaType
+	Implements   []*JavaType
 	Constructors []*JavaConstructor
 	Fields       map[string]*JavaField
-	Methods      map[string]*JavaMethod
-	Visibility   VisibilityType
-	Type         JavaTypeType
+	// TODO handle method overloads
+	Methods    map[string]*JavaMethod
+	Visibility VisibilityType
+	Type       JavaTypeType
+}
+
+func (jt *JavaType) LookupField(name string) *JavaField {
+	curr := jt
+	for curr != nil {
+		if field, ok := jt.Fields[name]; ok {
+			return field
+		}
+
+		// Go to parent class and see if it has the field
+		curr = curr.Extends
+	}
+	// Not found
+	return nil
 }
 
 func (jt *JavaType) String() string {
@@ -77,32 +94,32 @@ func (jf *JavaField) String() string {
 
 type JavaConstructor struct {
 	Visibility VisibilityType
-	Arguments  []*JavaArgument
+	Arguments  []*JavaParameter
 }
 
 type JavaMethod struct {
 	Name       string
 	ReturnType *JavaType
-	Arguments  []*JavaArgument
+	Params     []*JavaParameter
 	Visibility VisibilityType
 	IsStatic   bool
 }
 
 func (jm *JavaMethod) String() string {
 	argStr := ""
-	if jm.Arguments != nil {
-		argStr = strings.Join(util.MapToString(jm.Arguments), ", ")
+	if jm.Params != nil {
+		argStr = strings.Join(util.MapToString(jm.Params), ", ")
 	}
 
 	return fmt.Sprintf("%s %s%s %s(%s)", VisibilityTypeStrs[jm.Visibility], getStaticStr(jm.IsStatic), jm.ReturnType, jm.Name, argStr)
 }
 
-type JavaArgument struct {
+type JavaParameter struct {
 	Name      string
 	Type      *JavaType
 	IsVarargs bool
 }
 
-func (ja *JavaArgument) String() string {
+func (ja *JavaParameter) String() string {
 	return fmt.Sprintf("%s %s", ja.Type.Name, ja.Name)
 }

@@ -5,8 +5,8 @@ import (
 	"java-mini-ls-go/javaparser"
 )
 
-// GatherTypes traverses the given parse tree and gather all class, method, field, etc. declarations.
-// TODO doesn't check visibility of any types.
+// GatherTypes traverses the given parse tree and gathers all class, method, field, etc. declarations.
+// TODO doesn't get visibility of any types.
 func GatherTypes(tree antlr.Tree, builtins TypeMap) TypeMap {
 	visitor := &typeGatherer{
 		scopeTracker: NewScopeTracker(),
@@ -78,6 +78,11 @@ func (tg *typeGatherer) handleNewScopeFirstPass(newScope *Scope, _ antlr.ParserR
 
 func (tg *typeGatherer) handleNewScopeSecondPass(scope *Scope, ctx antlr.ParserRuleContext) {
 	switch scope.Type {
+	case ScopeTypeClass:
+		tg.checkScopeExtendsImplements(newScope, ctx)
+	case ScopeTypeInterface:
+		tg.checkScopeExtendsImplements(newScope, ctx)
+
 	case ScopeTypeConstructor:
 		fallthrough
 	case ScopeTypeGenericConstructor:
@@ -157,6 +162,17 @@ func (tg *typeGatherer) addNewTypeFromScope(scope *Scope, ttype JavaTypeType) {
 	tg.types[scope.Name] = newType
 }
 
+func (tg *typeGatherer) checkScopeExtendsImplements(scope *Scope, ctx *javaparser.ClassDeclarationContext) {
+	existingType := tg.lookupType(scope.Name)
+
+	extends := ctx.EXTENDS()
+	if extends != nil {
+		
+	}
+
+	existingType.Extends = tg.lookupType()
+}
+
 func (tg *typeGatherer) addNewConstructorFromScope(scope *Scope, ctx formalParametersCtx) {
 	// The top is the current scope, so we use top minus 1 to get the enclosing class
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
@@ -177,7 +193,7 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *Scope, ctx methodCtx) {
 	method := &JavaMethod{
 		Name:       scope.Name,
 		ReturnType: nil,
-		Arguments:  nil,
+		Params:     nil,
 		IsStatic:   false,
 	}
 
@@ -186,21 +202,21 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *Scope, ctx methodCtx) {
 		method.ReturnType = tg.lookupType(returnType)
 	}
 
-	method.Arguments = tg.getArgsFromContext(ctx)
+	method.Params = tg.getArgsFromContext(ctx)
 	method.IsStatic = tg.currentMemberIsStatic
 
 	currType.Methods[method.Name] = method
 }
 
-func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*JavaArgument {
-	args := make([]*JavaArgument, 0)
+func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*JavaParameter {
+	args := make([]*JavaParameter, 0)
 
 	argsCtx := ctx.FormalParameters().(*javaparser.FormalParametersContext)
 
 	receiverParameterCtx := argsCtx.ReceiverParameter()
 	if receiverParameterCtx != nil {
 		receiverParameter := receiverParameterCtx.(*javaparser.ReceiverParameterContext)
-		arg := &JavaArgument{
+		arg := &JavaParameter{
 			Name: "this",
 			Type: tg.lookupType(receiverParameter.TypeType().GetText()),
 		}
@@ -213,7 +229,7 @@ func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*JavaArgum
 		paramList := paramListI.(*javaparser.FormalParameterListContext)
 		for _, argICtx := range paramList.AllFormalParameter() {
 			argCtx := argICtx.(*javaparser.FormalParameterContext)
-			arg := &JavaArgument{
+			arg := &JavaParameter{
 				Name: argCtx.VariableDeclaratorId().GetText(),
 				Type: tg.lookupType(argCtx.TypeType().GetText()),
 			}
@@ -223,7 +239,7 @@ func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*JavaArgum
 		lastParamI := paramList.LastFormalParameter()
 		if lastParamI != nil {
 			lastParam := lastParamI.(*javaparser.LastFormalParameterContext)
-			arg := &JavaArgument{
+			arg := &JavaParameter{
 				Name:      lastParam.VariableDeclaratorId().GetText(),
 				Type:      tg.lookupType(lastParam.TypeType().GetText()),
 				IsVarargs: lastParam.ELLIPSIS() != nil,

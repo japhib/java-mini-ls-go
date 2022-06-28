@@ -54,6 +54,8 @@ type javaJsonType struct {
 	Name         string                `json:"name"`
 	Module       string                `json:"module"`
 	Package      string                `json:"package"`
+	Extends      string                `json:"extends"`
+	Implements   []string              `json:"implements"`
 	Fields       []javaJsonField       `json:"fields"`
 	Methods      []javaJsonMethod      `json:"methods"`
 	Constructors []javaJsonConstructor `json:"constructors"`
@@ -94,7 +96,7 @@ func loadBuiltinTypesFromDisk() error {
 	builtinTypes = make(TypeMap)
 
 	// add primitive types before we load the rest of the types
-	addPrimitiveTypes()
+	addPrimitiveTypes(builtinTypes)
 
 	err = loadJsonTypes(jsonTypes)
 	if err != nil {
@@ -143,7 +145,7 @@ func readJsonFromDisk() ([]javaJsonType, error) {
 	return types, nil
 }
 
-func addPrimitiveTypes() {
+func addPrimitiveTypes(typeMap TypeMap) {
 	primitives := []string{
 		"byte",
 		"short",
@@ -156,7 +158,7 @@ func addPrimitiveTypes() {
 	}
 
 	for _, name := range primitives {
-		builtinTypes[name] = &JavaType{
+		typeMap[name] = &JavaType{
 			Name:       name,
 			Visibility: VisibilityPublic,
 			Type:       JavaTypePrimitive,
@@ -175,6 +177,15 @@ func loadJsonTypes(jsonTypes []javaJsonType) error {
 			Visibility: VisibilityPublic,
 			Fields:     nil,
 			Methods:    nil,
+		}
+	}
+
+	// Next, fill in extends/implements references
+	for _, jsonType := range jsonTypes {
+		ttype := builtinTypes[jsonType.Name]
+		ttype.Extends = getOrCreateBuiltinType(jsonType.Extends)
+		if jsonType.Implements != nil {
+			ttype.Implements = util.Map(jsonType.Implements, getOrCreateBuiltinType)
 		}
 	}
 
@@ -218,7 +229,7 @@ func loadJsonTypes(jsonTypes []javaJsonType) error {
 				Name:       jsonMethod.Name,
 				Visibility: VisibilityPublic,
 				ReturnType: getOrCreateBuiltinType(jsonMethod.Type),
-				Arguments:  util.Map(jsonMethod.Args, toArg),
+				Params:     util.Map(jsonMethod.Args, toArg),
 				IsStatic:   slices.Contains(jsonMethod.Modifiers, "static"),
 			}
 		}
@@ -229,8 +240,8 @@ func loadJsonTypes(jsonTypes []javaJsonType) error {
 	return nil
 }
 
-func toArg(arg javaJsonArg) *JavaArgument {
-	return &JavaArgument{
+func toArg(arg javaJsonArg) *JavaParameter {
+	return &JavaParameter{
 		Name: arg.Name,
 		Type: getOrCreateBuiltinType(arg.Type),
 	}

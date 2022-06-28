@@ -1,3 +1,8 @@
+
+// TODO:
+// - Handle array and varargs params
+// - Use full package names in references to other types
+
 const { parse, NodeType } = require('node-html-parser');
 const axios = require('axios');
 const path = require('path');
@@ -23,7 +28,7 @@ function stripWhitespace(text) {
   // the html parser puts a bunch of unnecessary newlines in.
   // '\xa0' is non-breaking space.
   // FYI `replaceAll` only exists in Node v16+.
-  return text.replaceAll(/[\s\xa0]+/g, ' ');
+  return text.replaceAll(/[\s\xa0]+/g, ' ').trim();
 }
 
 const openingAngleBracket = '<'.charCodeAt(0);
@@ -106,6 +111,22 @@ async function genType(url) {
   }
 
   console.log(`getting type data for ${data.type} ${data.package}.${data.name}`);
+
+  let extendsImplements = root.querySelector('.type-signature .extends-implements');
+  if (extendsImplements) {
+    extendsImplements = stripWhitespace(extendsImplements.textContent);
+    const matches = /extends (.*?)( implements (.*))?$/.exec(extendsImplements);
+    if (matches) {
+      data.extends = stripGenerics(matches[1]);
+
+      const implementsStr = matches[3];
+      if (implementsStr) {
+        data.implements = implementsStr.split(',').map(s => s.trim()).map(stripGenerics);
+      }
+    } else {
+      throw new Error(`Can't parse extends-implements section, unexpected format: '${extendsImplements}'`)
+    }
+  }
 
   data.fields = parseTable('field', root, '.field-summary .summary-table');
   data.constructors = parseTable('constructor', root, '.constructor-summary .summary-table').map(parseArgs);
@@ -236,6 +257,8 @@ async function getClassLinks(packagePath) {
 }
 
 async function main() {
+  
+  // // const t = await genType('https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/lang/String.html')
   // const t = await genType('https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/List.html')
   // const types = [ t ];
   // fs.writeFileSync(outFilePath, JSON.stringify(types))

@@ -27,4 +27,5 @@ In the future I'd like to experiment with making parts of the language server mo
 - github.com/antlr/antlr4 for parsing
 - go.lsp.dev/protocol for the LSP implementation
 - github.com/micnncim/protocol-buffers-language-server for showing me how to use go.lsp.dev/protocol
-- github.com/IWANABETHATGUY/tower-lsp-boilerplate for showing me how to set up an VSCode LSP extension for an arbitrary executable (similar in Rust and Go)
+
+Java spec: https://docs.oracle.com/javase/specs/jls/se18/html/jls-15.html

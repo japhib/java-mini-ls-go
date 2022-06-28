@@ -80,10 +80,22 @@ variableModifier
 
 classDeclaration
     : CLASS identifier typeParameters?
-      (EXTENDS typeType)?
-      (IMPLEMENTS typeList)?
-      (PERMITS typeList)? // Java17
+      extendsDeclaration?
+      implementsDeclaration?
+      permitsDeclaration? // Java17
       classBody
+    ;
+
+extendsDeclaration
+    : EXTENDS typeType
+    ;
+
+implementsDeclaration
+    : IMPLEMENTS typeList
+    ;
+
+permitsDeclaration
+    : PERMITS typeList
     ;
 
 typeParameters

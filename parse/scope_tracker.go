@@ -2,6 +2,7 @@ package parse
 
 import (
 	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"golang.org/x/exp/slices"
 	"java-mini-ls-go/javaparser"
 	"java-mini-ls-go/util"
 	"strings"
@@ -22,6 +23,31 @@ const (
 	ScopeTypeMethod                 ScopeType = iota
 	ScopeTypeRecord                 ScopeType = iota
 )
+
+var classTypes = []ScopeType{
+	ScopeTypeAnnotationType,
+	ScopeTypeClass,
+	ScopeTypeEnum,
+	ScopeTypeInterface,
+	ScopeTypeRecord,
+}
+
+var methodTypes = []ScopeType{
+	ScopeTypeConstructor,
+	ScopeTypeGenericConstructor,
+	ScopeTypeGenericInterfaceMethod,
+	ScopeTypeGenericMethod,
+	ScopeTypeInterfaceMethod,
+	ScopeTypeMethod,
+}
+
+func (st ScopeType) IsClassType() bool {
+	return slices.Contains(classTypes, st)
+}
+
+func (st ScopeType) IsMethodType() bool {
+	return slices.Contains(methodTypes, st)
+}
 
 type Scope struct {
 	// Name is the name of the scope

@@ -49,7 +49,7 @@ public class Main {
 					Name: "main",
 					// void -> nil
 					ReturnType: nil,
-					Arguments: []*JavaArgument{
+					Params: []*JavaParameter{
 						{
 							Name:      "args",
 							Type:      strType,
@@ -135,7 +135,7 @@ class MyClass {
 			},
 			Constructors: []*JavaConstructor{
 				{
-					Arguments: []*JavaArgument{
+					Arguments: []*JavaParameter{
 						{
 							Name: "f",
 							Type: intType,
@@ -147,7 +147,7 @@ class MyClass {
 				"DoSomething": {
 					Name:       "DoSomething",
 					ReturnType: intType,
-					Arguments:  []*JavaArgument{},
+					Params:     []*JavaParameter{},
 				},
 			},
 			Type: JavaTypeClass,
@@ -185,7 +185,7 @@ enum MyEnum {
 			Type: JavaTypeEnum,
 			Constructors: []*JavaConstructor{
 				{
-					Arguments: []*JavaArgument{
+					Arguments: []*JavaParameter{
 						{
 							Name: "v",
 							Type: strType,
@@ -203,7 +203,7 @@ enum MyEnum {
 				"getValue": {
 					Name:       "getValue",
 					ReturnType: strType,
-					Arguments:  []*JavaArgument{},
+					Params:     []*JavaParameter{},
 				},
 			},
 		},
