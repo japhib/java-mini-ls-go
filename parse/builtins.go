@@ -54,7 +54,7 @@ type javaJsonType struct {
 	Name         string                `json:"name"`
 	Module       string                `json:"module"`
 	Package      string                `json:"package"`
-	Extends      string                `json:"extends"`
+	Extends      []string              `json:"extends"`
 	Implements   []string              `json:"implements"`
 	Fields       []javaJsonField       `json:"fields"`
 	Methods      []javaJsonMethod      `json:"methods"`
@@ -183,7 +183,9 @@ func loadJsonTypes(jsonTypes []javaJsonType) error {
 	// Next, fill in extends/implements references
 	for _, jsonType := range jsonTypes {
 		ttype := builtinTypes[jsonType.Name]
-		ttype.Extends = getOrCreateBuiltinType(jsonType.Extends)
+		if jsonType.Extends != nil {
+			ttype.Extends = util.Map(jsonType.Extends, getOrCreateBuiltinType)
+		}
 		if jsonType.Implements != nil {
 			ttype.Implements = util.Map(jsonType.Implements, getOrCreateBuiltinType)
 		}

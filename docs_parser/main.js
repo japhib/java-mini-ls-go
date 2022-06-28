@@ -25,7 +25,7 @@ function toCachedPath(url) {
 }
 
 function stripWhitespace(text) {
-  // the html parser puts a bunch of unnecessary newlines in.
+  // the html javaparser puts a bunch of unnecessary newlines in.
   // '\xa0' is non-breaking space.
   // FYI `replaceAll` only exists in Node v16+.
   return text.replaceAll(/[\s\xa0]+/g, ' ').trim();
@@ -117,11 +117,16 @@ async function genType(url) {
     extendsImplements = stripWhitespace(extendsImplements.textContent);
     const matches = /extends (.*?)( implements (.*))?$/.exec(extendsImplements);
     if (matches) {
-      data.extends = stripGenerics(matches[1]);
+      const extendsStr = matches[1];
+      if (extendsStr) {
+        // Interfaces can extend more than one other type, so this is a type list
+        // instead of a single type
+        data.extends = parseTypeList(matches[1]);
+      }
 
       const implementsStr = matches[3];
       if (implementsStr) {
-        data.implements = implementsStr.split(',').map(s => s.trim()).map(stripGenerics);
+        data.implements = parseTypeList(implementsStr);
       }
     } else {
       throw new Error(`Can't parse extends-implements section, unexpected format: '${extendsImplements}'`)
@@ -139,6 +144,10 @@ async function genType(url) {
   // console.log(util.inspect(data, {depth: 99}));
 
   return data;
+}
+
+function parseTypeList(typeList) {
+  return typeList.split(',').map(s => s.trim()).map(stripGenerics);
 }
 
 function parseTable(type, root, tableSelector) {

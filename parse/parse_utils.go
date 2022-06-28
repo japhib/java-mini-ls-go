@@ -1,8 +1,9 @@
 package parse
 
 import (
-	"go.lsp.dev/protocol"
 	"java-mini-ls-go/javaparser"
+
+	"go.lsp.dev/protocol"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 )

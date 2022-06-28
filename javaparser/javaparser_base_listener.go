@@ -1,7 +1,6 @@
 // Code generated from JavaParser.g4 by ANTLR 4.10.1. DO NOT EDIT.
 
-package parser // JavaParser
-
+package javaparser // JavaParser
 import "github.com/antlr/antlr4/runtime/Go/antlr"
 
 // BaseJavaParserListener is a complete listener for a parse tree produced by JavaParser.
@@ -137,6 +136,22 @@ func (s *BaseJavaParserListener) EnterInterfaceDeclaration(ctx *InterfaceDeclara
 
 // ExitInterfaceDeclaration is called when production interfaceDeclaration is exited.
 func (s *BaseJavaParserListener) ExitInterfaceDeclaration(ctx *InterfaceDeclarationContext) {}
+
+// EnterInterfaceDeclarationExtends is called when production interfaceDeclarationExtends is entered.
+func (s *BaseJavaParserListener) EnterInterfaceDeclarationExtends(ctx *InterfaceDeclarationExtendsContext) {
+}
+
+// ExitInterfaceDeclarationExtends is called when production interfaceDeclarationExtends is exited.
+func (s *BaseJavaParserListener) ExitInterfaceDeclarationExtends(ctx *InterfaceDeclarationExtendsContext) {
+}
+
+// EnterInterfaceDeclarationPermits is called when production interfaceDeclarationPermits is entered.
+func (s *BaseJavaParserListener) EnterInterfaceDeclarationPermits(ctx *InterfaceDeclarationPermitsContext) {
+}
+
+// ExitInterfaceDeclarationPermits is called when production interfaceDeclarationPermits is exited.
+func (s *BaseJavaParserListener) ExitInterfaceDeclarationPermits(ctx *InterfaceDeclarationPermitsContext) {
+}
 
 // EnterClassBody is called when production classBody is entered.
 func (s *BaseJavaParserListener) EnterClassBody(ctx *ClassBodyContext) {}

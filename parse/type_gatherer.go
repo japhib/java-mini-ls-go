@@ -1,8 +1,10 @@
 package parse
 
 import (
-	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"java-mini-ls-go/javaparser"
+	"java-mini-ls-go/util"
+
+	"github.com/antlr/antlr4/runtime/Go/antlr"
 )
 
 // GatherTypes traverses the given parse tree and gathers all class, method, field, etc. declarations.
@@ -79,14 +81,14 @@ func (tg *typeGatherer) handleNewScopeFirstPass(newScope *Scope, _ antlr.ParserR
 func (tg *typeGatherer) handleNewScopeSecondPass(scope *Scope, ctx antlr.ParserRuleContext) {
 	switch scope.Type {
 	case ScopeTypeClass:
-		tg.checkScopeExtendsImplements(newScope, ctx)
+		tg.checkScopeExtendsImplements(scope, ctx)
 	case ScopeTypeInterface:
-		tg.checkScopeExtendsImplements(newScope, ctx)
+		tg.checkScopeExtendsImplements(scope, ctx)
 
 	case ScopeTypeConstructor:
 		fallthrough
 	case ScopeTypeGenericConstructor:
-		tg.addNewConstructorFromScope(scope, ctx.(formalParametersCtx))
+		tg.addNewConstructorFromScope(ctx.(formalParametersCtx))
 
 	case ScopeTypeMethod:
 		fallthrough
@@ -162,18 +164,71 @@ func (tg *typeGatherer) addNewTypeFromScope(scope *Scope, ttype JavaTypeType) {
 	tg.types[scope.Name] = newType
 }
 
-func (tg *typeGatherer) checkScopeExtendsImplements(scope *Scope, ctx *javaparser.ClassDeclarationContext) {
+func (tg *typeGatherer) checkScopeExtendsImplements(scope *Scope, ctx antlr.ParserRuleContext) {
 	existingType := tg.lookupType(scope.Name)
-
-	extends := ctx.EXTENDS()
-	if extends != nil {
-		
-	}
-
-	existingType.Extends = tg.lookupType()
+	existingType.Extends = tg.getExtendsTypes(ctx)
+	existingType.Implements = tg.getImplementsTypes(ctx)
+	// TODO add existingType.Permits if it's relevant (new java 17 feature I think)
 }
 
-func (tg *typeGatherer) addNewConstructorFromScope(scope *Scope, ctx formalParametersCtx) {
+func (tg *typeGatherer) getExtendsTypes(ctx antlr.ParserRuleContext) []*JavaType {
+	typeTypes := []*javaparser.TypeTypeContext{}
+
+	switch tctx := ctx.(type) {
+	case *javaparser.ClassDeclarationContext:
+		extendsI := tctx.ClassDeclarationExtends()
+		if extendsI != nil {
+			extends := extendsI.(*javaparser.ClassDeclarationExtendsContext)
+			typeTypes = []*javaparser.TypeTypeContext{
+				extends.TypeType().(*javaparser.TypeTypeContext),
+			}
+		}
+	case *javaparser.InterfaceDeclarationContext:
+		extendsI := tctx.InterfaceDeclarationExtends()
+		if extendsI != nil {
+			extends := extendsI.(*javaparser.InterfaceDeclarationExtendsContext)
+			extendsTypeList := extends.TypeList().(*javaparser.TypeListContext)
+			allTypeTypes := extendsTypeList.AllTypeType()
+			for _, tt := range allTypeTypes {
+				if tt != nil {
+					typeTypes = append(typeTypes, tt.(*javaparser.TypeTypeContext))
+				}
+			}
+		}
+	}
+
+	return util.Map(typeTypes, func(typeType *javaparser.TypeTypeContext) *JavaType {
+		extendsTypeName := typeType.ClassOrInterfaceType().GetText()
+		return tg.lookupType(extendsTypeName)
+	})
+}
+
+func (tg *typeGatherer) getImplementsTypes(ctx antlr.ParserRuleContext) []*JavaType {
+	tctx, ok := ctx.(*javaparser.ClassDeclarationContext)
+	if !ok {
+		return []*JavaType{}
+	}
+
+	implementsI := tctx.ClassDeclarationImplements()
+	if implementsI != nil {
+		typeList := implementsI.(*javaparser.ClassDeclarationImplementsContext).TypeList().(*javaparser.TypeListContext)
+
+		implTypes := []*JavaType{}
+		allTypeTypes := typeList.AllTypeType()
+		for _, tt := range allTypeTypes {
+			if tt != nil {
+				typeType := tt.(*javaparser.TypeTypeContext)
+				extendsTypeName := typeType.ClassOrInterfaceType().GetText()
+				implTypes = append(implTypes, tg.lookupType(extendsTypeName))
+			}
+		}
+		return implTypes
+	}
+
+	return []*JavaType{}
+}
+
+func (tg *typeGatherer) addNewConstructorFromScope(ctx formalParametersCtx) {
 	// The top is the current scope, so we use top minus 1 to get the enclosing class
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
 	currType := tg.types[currTypeName]

@@ -49,10 +49,12 @@ func getStaticStr(isStatic bool) string {
 }
 
 type JavaType struct {
-	Name         string
-	Package      string
-	Module       string
-	Extends      *JavaType
+	Name    string
+	Package string
+	Module  string
+	// Note Extends is a slice only because interfaces can extend multiple other interfaces.
+	// For classes this will have a maximum of one element.
+	Extends      []*JavaType
 	Implements   []*JavaType
 	Constructors []*JavaConstructor
 	Fields       map[string]*JavaField
@@ -69,8 +71,13 @@ func (jt *JavaType) LookupField(name string) *JavaField {
 			return field
 		}
 
-		// Go to parent class and see if it has the field
-		curr = curr.Extends
+		// Go to parent class/interfaces and see if any of them have the field
+		for _, supertype := range curr.Extends {
+			field := supertype.LookupField(name)
+			if field != nil {
+				return field
+			}
+		}
 	}
 	// Not found
 	return nil

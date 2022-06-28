@@ -1,7 +1,6 @@
 // Code generated from JavaParser.g4 by ANTLR 4.10.1. DO NOT EDIT.
 
-package parser // JavaParser
-
+package javaparser // JavaParser
 import "github.com/antlr/antlr4/runtime/Go/antlr"
 
 // JavaParserListener is a complete listener for a parse tree produced by JavaParser.
@@ -64,6 +63,12 @@ type JavaParserListener interface {
 
 	// EnterInterfaceDeclaration is called when entering the interfaceDeclaration production.
 	EnterInterfaceDeclaration(c *InterfaceDeclarationContext)
+
+	// EnterInterfaceDeclarationExtends is called when entering the interfaceDeclarationExtends production.
+	EnterInterfaceDeclarationExtends(c *InterfaceDeclarationExtendsContext)
+
+	// EnterInterfaceDeclarationPermits is called when entering the interfaceDeclarationPermits production.
+	EnterInterfaceDeclarationPermits(c *InterfaceDeclarationPermitsContext)
 
 	// EnterClassBody is called when entering the classBody production.
 	EnterClassBody(c *ClassBodyContext)
@@ -445,6 +450,12 @@ type JavaParserListener interface {
 
 	// ExitInterfaceDeclaration is called when exiting the interfaceDeclaration production.
 	ExitInterfaceDeclaration(c *InterfaceDeclarationContext)
+
+	// ExitInterfaceDeclarationExtends is called when exiting the interfaceDeclarationExtends production.
+	ExitInterfaceDeclarationExtends(c *InterfaceDeclarationExtendsContext)
+
+	// ExitInterfaceDeclarationPermits is called when exiting the interfaceDeclarationPermits production.
+	ExitInterfaceDeclarationPermits(c *InterfaceDeclarationPermitsContext)
 
 	// ExitClassBody is called when exiting the classBody production.
 	ExitClassBody(c *ClassBodyContext)

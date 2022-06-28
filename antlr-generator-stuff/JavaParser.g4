@@ -127,7 +127,15 @@ enumBodyDeclarations
     ;
 
 interfaceDeclaration
-    : INTERFACE identifier typeParameters? (EXTENDS typeList)? (PERMITS typeList)? interfaceBody
+    : INTERFACE identifier typeParameters? interfaceDeclarationExtends? interfaceDeclarationPermits? interfaceBody
+    ;
+
+interfaceDeclarationExtends
+    : EXTENDS typeList
+    ;
+
+interfaceDeclarationPermits
+    : PERMITS typeList
     ;
 
 classBody

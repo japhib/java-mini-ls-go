@@ -1,11 +1,12 @@
 package parse
 
 import (
-	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"golang.org/x/exp/slices"
 	"java-mini-ls-go/javaparser"
 	"java-mini-ls-go/util"
 	"strings"
+
+	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"golang.org/x/exp/slices"
 )
 
 type ScopeType int
