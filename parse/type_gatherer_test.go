@@ -157,3 +157,57 @@ class MyClass {
 
 	assert.Equal(t, expectedTypes, types)
 }
+
+func TestGatherTypes_Enum(t *testing.T) {
+	tree, errors := Parse(`
+enum MyEnum {
+  First("f"), Second("s"), Third("t");
+
+  private String value;
+
+  MyEnum(String v) {
+    this.value = v;
+  }
+
+  public String getValue() {
+    return this.value;
+  }
+}`)
+	assert.Equal(t, 0, len(errors))
+
+	strType := &JavaType{Name: "String"}
+	builtins := TypeMap{"String": strType}
+	types := GatherTypes(tree, builtins)
+
+	expectedTypes := TypeMap{
+		"MyEnum": &JavaType{
+			Name: "MyEnum",
+			Type: JavaTypeEnum,
+			Constructors: []*JavaConstructor{
+				{
+					Arguments: []*JavaArgument{
+						{
+							Name: "v",
+							Type: strType,
+						},
+					},
+				},
+			},
+			Fields: map[string]*JavaField{
+				"value": {
+					Name: "value",
+					Type: strType,
+				},
+			},
+			Methods: map[string]*JavaMethod{
+				"getValue": {
+					Name:       "getValue",
+					ReturnType: strType,
+					Arguments:  []*JavaArgument{},
+				},
+			},
+		},
+	}
+
+	assert.Equal(t, expectedTypes, types)
+}
