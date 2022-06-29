@@ -3,11 +3,12 @@ package server
 import (
 	"context"
 	"fmt"
+	"java-mini-ls-go/parse"
+	"java-mini-ls-go/util"
+
 	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
 	"go.uber.org/zap"
-	"java-mini-ls-go/parse"
-	"java-mini-ls-go/util"
 )
 
 // Runtime check to ensure JavaLS implements interface
@@ -112,21 +113,19 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 
 	parsed, errors := parse.Parse(textDocument.Text)
 
-	if len(errors) > 0 {
-		// publish diagnostics in a separate goroutine
-		go func(errors []parse.SyntaxError) {
-			params := &protocol.PublishDiagnosticsParams{
-				URI:         textDocument.URI,
-				Version:     (uint32)(textDocument.Version),
-				Diagnostics: util.Map(errors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
-			}
+	// publish diagnostics in a separate goroutine
+	go func(errors []parse.SyntaxError) {
+		params := &protocol.PublishDiagnosticsParams{
+			URI:         textDocument.URI,
+			Version:     (uint32)(textDocument.Version),
+			Diagnostics: util.Map(errors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
+		}
 
-			err := j.client.PublishDiagnostics(context.Background(), params)
-			if err != nil {
-				j.log.Error(fmt.Sprintf("Error publishing diagnostics: %v", err))
-			}
-		}(errors)
-	}
+		err := j.client.PublishDiagnostics(context.Background(), params)
+		if err != nil {
+			j.log.Error(fmt.Sprintf("Error publishing diagnostics: %v", err))
+		}
+	}(errors)
 
 	symbols := parse.FindSymbols(parsed)
 	j.symbols.Set(uriString, symbols)
