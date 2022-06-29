@@ -189,7 +189,7 @@ func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx) {
 		if !expr.ttype.CoercesTo(ttype) {
 			tc.addError(TypeError{
 				Loc:     expr.loc,
-				Message: fmt.Sprintf("Expected expression of type %s, instead got %s", ttype.Name, expr.ttype.Name),
+				Message: fmt.Sprintf("Type mismatch: cannot convert from %s to %s", expr.ttype.Name, ttype.Name),
 			})
 		}
 	}
@@ -249,7 +249,18 @@ func (tc *typeChecker) handleLiteral(ctx *javaparser.LiteralContext) {
 		return
 	}
 
-	// TODO null literal, triple-quoted text block (java 17 only)
+	nullLit := ctx.NULL_LITERAL()
+	if nullLit != nil {
+		// TODO add special "any" type that can be coerced to any type
+		tc.pushExprTypeName("Object", bounds)
+		return
+	}
+
+	textBlockLit := ctx.TEXT_BLOCK()
+	if textBlockLit != nil {
+		tc.pushExprTypeName("String", bounds)
+		return
+	}
 }
 
 func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {

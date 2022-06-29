@@ -2,6 +2,7 @@ package parse
 
 import (
 	"fmt"
+	"golang.org/x/exp/slices"
 	"java-mini-ls-go/util"
 	"strings"
 )
@@ -87,10 +88,83 @@ func (jt *JavaType) String() string {
 	return fmt.Sprintf("%s %s %s", VisibilityTypeStrs[jt.Visibility], JavaTypeTypeStrs[jt.Type], jt.Name)
 }
 
+func (jt *JavaType) AllSuperClasses() []*JavaType {
+	supers := []*JavaType{}
+
+	if jt.Extends == nil {
+		return supers
+	}
+
+	for _, e := range jt.Extends {
+		// Append immediate superclass
+		supers = append(supers, e)
+
+		// Recursively append superclasses of that superclass
+		for _, ee := range e.AllSuperClasses() {
+			supers = append(supers, ee)
+		}
+	}
+
+	return supers
+}
+
+// Map of which other primitive/boxed types each primitive type can coerce to
+var primitivesCoercions = map[string][]string{
+	"byte":    {"Byte", "short", "int", "long", "float", "double"},
+	"short":   {"Short", "int", "long", "float", "double"},
+	"int":     {"Integer", "long", "float", "double"},
+	"long":    {"Long", "float", "double"},
+	"float":   {"Float", "double"},
+	"double":  {"Double"},
+	"char":    {"Character", "int", "long", "float", "double"},
+	"boolean": {"Boolean"},
+}
+
+// Map of boxed primitives back to their unboxed primitives
+var boxedPrimitives = map[string]string{
+	"Byte":    "byte",
+	"short":   "Short",
+	"int":     "Integer",
+	"long":    "Long",
+	"float":   "Float",
+	"double":  "Double",
+	"char":    "Character",
+	"boolean": "Boolean",
+}
+
 // CoercesTo says whether a type can be converted to another type without a type cast.
 func (jt *JavaType) CoercesTo(other *JavaType) bool {
-	return jt == other
-	// TODO check whether jt is a subclass of other
+	if jt == other {
+		return true
+	}
+
+	// Any type, including primitives, can be coerced to java.lang.Object
+	if other.Name == "Object" {
+		return true
+	}
+
+	// If it's a primitive type, there are several coercions that can be made automatically
+	if jt.Type == JavaTypePrimitive {
+		return slices.Contains(primitivesCoercions[jt.Name], other.Name)
+	}
+
+	// Boxed primitive types can be converted to the non-boxed primitives
+	if jt.Type == JavaTypeClass && other.Type == JavaTypePrimitive {
+		if boxed, ok := boxedPrimitives[jt.Name]; ok && other.Name == boxed {
+			return true
+		}
+	}
+
+	// Is it a superclass of this type?
+	superclasses := jt.AllSuperClasses()
+	for _, super := range superclasses {
+		if super == other {
+			return true
+		}
+	}
+
+	// In any other case, it's false
+	return false
 }
 
 type JavaField struct {

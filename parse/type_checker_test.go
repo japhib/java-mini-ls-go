@@ -120,7 +120,7 @@ public class MainClass {
 					Column: 16,
 				},
 			},
-			Message: "Expected expression of type int, instead got String",
+			Message: "Type mismatch: cannot convert from String to int",
 		},
 	}, typeErrors)
 }
@@ -144,7 +144,7 @@ public class MainClass {
 					Column: 22,
 				},
 			},
-			Message: "Expected expression of type String, instead got int",
+			Message: "Type mismatch: cannot convert from int to String",
 		},
 	}, typeErrors)
 }

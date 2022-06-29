@@ -280,7 +280,10 @@ async function main() {
   let successCount = 0;
   let errorCount = 0;
 
-  await Promise.all(moduleLinks.map(async moduleLink => {
+  // Uncomment this line to load all modules
+  // await Promise.all(moduleLinks.map(async moduleLink => {
+    // For now only load java.base module (packages like java.lang, java.util, java.time)
+    const moduleLink = 'https://docs.oracle.com/en/java/javase/17/docs/api/java.base/module-summary.html';
     const packageLinks = await getPackageLinks(moduleLink);
 
     await Promise.all(packageLinks.map(async packageLink => {
@@ -297,7 +300,7 @@ async function main() {
         }
       }));
     }));
-  }));
+  // }));
 
   fs.writeFileSync(outFilePath, JSON.stringify(types));
   console.log(`Successes: ${successCount}, errors: ${errorCount}`)

@@ -23,17 +23,21 @@ type JavaLS struct {
 	symbols           *util.SyncMap[string, []*parse.CodeSymbol]
 	builtinTypes      map[string]*parse.JavaType
 
+	// Dependencies that can be mocked for testing
+	diagnosticsPublisher DiagnosticsPublisher
+
 	// Options
 	ReadStdlibTypes bool
 }
 
 func NewServer(ctx context.Context, logger *zap.Logger) *JavaLS {
 	return &JavaLS{
-		ctx:               ctx,
-		log:               logger,
-		documentTextCache: util.NewSyncMap[string, protocol.TextDocumentItem](),
-		symbols:           util.NewSyncMap[string, []*parse.CodeSymbol](),
-		builtinTypes:      make(map[string]*parse.JavaType),
+		ctx:                  ctx,
+		log:                  logger,
+		documentTextCache:    util.NewSyncMap[string, protocol.TextDocumentItem](),
+		symbols:              util.NewSyncMap[string, []*parse.CodeSymbol](),
+		builtinTypes:         make(map[string]*parse.JavaType),
+		diagnosticsPublisher: &RealDiagnosticsPublisher{},
 	}
 }
 
@@ -113,19 +117,7 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 
 	parsed, errors := parse.Parse(textDocument.Text)
 
-	// publish diagnostics in a separate goroutine
-	go func(errors []parse.SyntaxError) {
-		params := &protocol.PublishDiagnosticsParams{
-			URI:         textDocument.URI,
-			Version:     (uint32)(textDocument.Version),
-			Diagnostics: util.Map(errors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
-		}
-
-		err := j.client.PublishDiagnostics(context.Background(), params)
-		if err != nil {
-			j.log.Error(fmt.Sprintf("Error publishing diagnostics: %v", err))
-		}
-	}(errors)
+	j.diagnosticsPublisher.PublishDiagnostics(j, textDocument, errors)
 
 	symbols := parse.FindSymbols(parsed)
 	j.symbols.Set(uriString, symbols)
