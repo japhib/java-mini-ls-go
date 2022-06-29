@@ -115,12 +115,20 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	uriString := (string)(textDocument.URI)
 	j.documentTextCache.Set(uriString, textDocument)
 
-	parsed, errors := parse.Parse(textDocument.Text)
-
-	j.diagnosticsPublisher.PublishDiagnostics(j, textDocument, errors)
+	parsed, syntaxErrors := parse.Parse(textDocument.Text)
 
 	symbols := parse.FindSymbols(parsed)
 	j.symbols.Set(uriString, symbols)
+
+	userTypes := parse.GatherTypes(parsed, j.builtinTypes)
+	typeErrors := parse.CheckTypes(parsed, userTypes, j.builtinTypes)
+
+	diagnostics := util.CombineSlices(
+		util.Map(syntaxErrors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
+		util.Map(typeErrors, func(se parse.TypeError) protocol.Diagnostic { return se.ToDiagnostic() }),
+	)
+
+	j.diagnosticsPublisher.PublishDiagnostics(j, textDocument, diagnostics)
 }
 
 var symbolTypeMap = map[parse.CodeSymbolType]protocol.SymbolKind{

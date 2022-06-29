@@ -6,7 +6,6 @@ import (
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
 	"go.uber.org/zap/zaptest"
-	"java-mini-ls-go/parse"
 	"java-mini-ls-go/util"
 	"testing"
 	"time"
@@ -18,14 +17,14 @@ func testCtx() (context.Context, context.CancelFunc) {
 
 type publishDiagnosticsCall struct {
 	textDocument protocol.TextDocumentItem
-	errors       []parse.SyntaxError
+	errors       []protocol.Diagnostic
 }
 
 type mockDiagnosticsPublisher struct {
 	publishDiagnosticsCalls []publishDiagnosticsCall
 }
 
-func (mdp *mockDiagnosticsPublisher) PublishDiagnostics(_ *JavaLS, textDocument protocol.TextDocumentItem, errors []parse.SyntaxError) {
+func (mdp *mockDiagnosticsPublisher) PublishDiagnostics(_ *JavaLS, textDocument protocol.TextDocumentItem, errors []protocol.Diagnostic) {
 	mdp.publishDiagnosticsCalls = append(mdp.publishDiagnosticsCalls, publishDiagnosticsCall{
 		textDocument: textDocument,
 		errors:       errors,

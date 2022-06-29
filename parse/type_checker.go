@@ -2,6 +2,7 @@ package parse
 
 import (
 	"fmt"
+	"go.lsp.dev/protocol"
 	"java-mini-ls-go/javaparser"
 	"java-mini-ls-go/util"
 
@@ -12,6 +13,15 @@ import (
 type TypeError struct {
 	Loc     Bounds
 	Message string
+}
+
+func (te *TypeError) ToDiagnostic() protocol.Diagnostic {
+	return protocol.Diagnostic{
+		Range:    BoundsToRange(te.Loc),
+		Severity: protocol.DiagnosticSeverityError,
+		Source:   "java-mini-ls",
+		Message:  te.Message,
+	}
 }
 
 // CheckTypes traverses the given parse tree and performs type checking in all applicable
@@ -93,7 +103,13 @@ func (tc *typeChecker) lookupType(typeName string) *JavaType {
 		return userType
 	}
 
-	return tc.builtins[typeName]
+	if builtinType, ok := tc.builtins[typeName]; ok {
+		return builtinType
+	}
+
+	// Type doesn't exist, create it
+	// TODO checks getting from builtins again unnecessarily
+	return getOrCreateBuiltinType(typeName)
 }
 
 func (tc *typeChecker) pushExprType(ttype *JavaType, bounds Bounds) {
@@ -105,6 +121,21 @@ func (tc *typeChecker) pushExprType(ttype *JavaType, bounds Bounds) {
 
 func (tc *typeChecker) pushExprTypeName(typeName string, bounds Bounds) {
 	tc.pushExprType(tc.lookupType(typeName), bounds)
+}
+
+// checkAndAddLocal adds a local variable, while first checking whether the local
+// is already defined, and if so, adding an error.
+func (tc *typeChecker) checkAndAddLocal(name string, ttype *JavaType, bounds Bounds, scopeType string) {
+	topScope := tc.typeScopes.Top()
+	if _, ok := topScope.locals[name]; ok {
+		currMethodName := tc.scopeTracker.ScopeStack.Top().Name
+		tc.addError(TypeError{
+			Loc:     bounds,
+			Message: fmt.Sprintf("Variable %s is already defined in %s %s", name, scopeType, currMethodName),
+		})
+	}
+
+	topScope.addLocal(name, ttype)
 }
 
 func (tc *typeChecker) getEnclosingType() *JavaType {
@@ -157,21 +188,20 @@ func (tc *typeChecker) ExitBlockStatement(_ *javaparser.BlockStatementContext) {
 }
 
 func (tc *typeChecker) ExitFieldDeclaration(ctx *javaparser.FieldDeclarationContext) {
-	tc.handleTypedVariableDecl(ctx)
+	tc.handleTypedVariableDecl(ctx, ParserRuleContextToBounds(ctx), false)
 }
 
 func (tc *typeChecker) ExitLocalVariableDeclaration(ctx *javaparser.LocalVariableDeclarationContext) {
 	if ctx.VAR() == nil {
-		tc.handleTypedVariableDecl(ctx)
+		tc.handleTypedVariableDecl(ctx, ParserRuleContextToBounds(ctx), true)
 	} else {
-		tc.handleUntypedLocalVariableDecl(ctx)
+		tc.handleUntypedLocalVariableDecl(ctx, ParserRuleContextToBounds(ctx))
 	}
 }
 
 // e.g. `String a = "hi"`
-func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx) {
+func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx, bounds Bounds, isLocal bool) {
 	ttype := tc.lookupType(ctx.TypeType().GetText())
-	currTypeScope := tc.typeScopes.Top()
 
 	// There can be multiple variable declarators
 	varDecls := ctx.VariableDeclarators().(*javaparser.VariableDeclaratorsContext).AllVariableDeclarator()
@@ -179,7 +209,16 @@ func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx) {
 		varDecl := varDeclI.(*javaparser.VariableDeclaratorContext)
 
 		varName := varDecl.VariableDeclaratorId().(*javaparser.VariableDeclaratorIdContext).Identifier().GetText()
-		currTypeScope.addLocal(varName, ttype)
+
+		var scopeType string
+		if isLocal {
+			scopeType = "method"
+		} else {
+			scopeType = "class"
+		}
+
+		// TODO fix bounds, the error message also red underlines the equals sign
+		tc.checkAndAddLocal(varName, ttype, bounds, scopeType)
 	}
 
 	// Make sure every value in the expression stack (which is the value of all the initializer expressions
@@ -196,12 +235,11 @@ func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx) {
 }
 
 // e.g. `var a = "hi"`
-func (tc *typeChecker) handleUntypedLocalVariableDecl(ctx *javaparser.LocalVariableDeclarationContext) {
+func (tc *typeChecker) handleUntypedLocalVariableDecl(ctx *javaparser.LocalVariableDeclarationContext, bounds Bounds) {
 	// In order for type to be inferred, we must have already pushed the expression type
 	ttype := tc.expressionStack.Pop().ttype
 
-	currTypeScope := tc.typeScopes.Top()
-	currTypeScope.addLocal(ctx.Identifier().GetText(), ttype)
+	tc.checkAndAddLocal(ctx.Identifier().GetText(), ttype, bounds, "method")
 }
 
 func (tc *typeChecker) ExitPrimary(ctx *javaparser.PrimaryContext) {
@@ -296,21 +334,38 @@ func (tc *typeChecker) ExitExpression(ctx *javaparser.ExpressionContext) {
 	bopToken := ctx.GetBop()
 	if bopToken != nil {
 		bop := bopToken.GetText()
-		tc.handleBinaryExpression(bop)
+		tc.handleBinaryExpression(bop, ParserRuleContextToBounds(ctx))
 	}
 }
 
 // Binary operators that take in two numbers and return a number
 var arithmeticBops = []string{"+", "-", "*", "/", "%"}
 
-func (tc *typeChecker) handleBinaryExpression(bop string) {
-	right := tc.expressionStack.Pop()
-	if right.ttype == nil {
-		panic("right ttype is nil")
-	}
+func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds Bounds) {
 	left := tc.expressionStack.Pop()
+	right := tc.expressionStack.Pop()
+	// TODO panic instead of adding error(s) when we're more confident
+	if right.ttype == nil {
+		tc.addError(TypeError{
+			Message: "TODO: right expression is nil",
+			Loc:     exprBounds,
+		})
+		tc.expressionStack.Push(typedExpression{
+			loc:   exprBounds,
+			ttype: tc.lookupType("Object"),
+		})
+		return
+	}
 	if left.ttype == nil {
-		panic("left ttype is nil")
+		tc.addError(TypeError{
+			Message: "TODO: left expression is nil",
+			Loc:     exprBounds,
+		})
+		tc.expressionStack.Push(typedExpression{
+			loc:   exprBounds,
+			ttype: tc.lookupType("Object"),
+		})
+		return
 	}
 
 	if slices.Contains(arithmeticBops, bop) {

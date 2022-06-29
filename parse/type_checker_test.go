@@ -148,3 +148,28 @@ public class MainClass {
 		},
 	}, typeErrors)
 }
+
+func TestCheckTypes_CheckLocalVars_ErrorRedefined(t *testing.T) {
+	typeErrors := parseAndTypeCheck(t, `
+public class MainClass {
+	public void add() {
+		int a;
+		int a = 1;
+	}
+}`)
+	assert.Equal(t, []TypeError{
+		{
+			Loc: Bounds{
+				Start: FileLocation{
+					Line:   4,
+					Column: 22,
+				},
+				End: FileLocation{
+					Line:   4,
+					Column: 22,
+				},
+			},
+			Message: "Local variable a was defined previously",
+		},
+	}, typeErrors)
+}

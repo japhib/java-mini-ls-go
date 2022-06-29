@@ -25,3 +25,20 @@ func MapToString[T fmt.Stringer](input []T) []string {
 
 	return ret
 }
+
+// CombineSlices takes any number of slices and combines their contents into one single slice.
+func CombineSlices[T any](inputs ...[]T) []T {
+	totalLength := 0
+	for _, slice := range inputs {
+		totalLength += len(slice)
+	}
+
+	ret := make([]T, 0, totalLength)
+	for _, slice := range inputs {
+		for _, item := range slice {
+			ret = append(ret, item)
+		}
+	}
+
+	return ret
+}

@@ -4,28 +4,26 @@ import (
 	"context"
 	"fmt"
 	"go.lsp.dev/protocol"
-	"java-mini-ls-go/parse"
-	"java-mini-ls-go/util"
 )
 
 type DiagnosticsPublisher interface {
-	PublishDiagnostics(j *JavaLS, textDocument protocol.TextDocumentItem, errors []parse.SyntaxError)
+	PublishDiagnostics(j *JavaLS, textDocument protocol.TextDocumentItem, diagnostics []protocol.Diagnostic)
 }
 
 type RealDiagnosticsPublisher struct{}
 
-func (rdp *RealDiagnosticsPublisher) PublishDiagnostics(j *JavaLS, textDocument protocol.TextDocumentItem, errors []parse.SyntaxError) {
+func (rdp *RealDiagnosticsPublisher) PublishDiagnostics(j *JavaLS, textDocument protocol.TextDocumentItem, diagnostics []protocol.Diagnostic) {
 	// publish diagnostics in a separate goroutine
-	go func(errors []parse.SyntaxError) {
+	go func(diagnostics []protocol.Diagnostic) {
 		params := &protocol.PublishDiagnosticsParams{
 			URI:         textDocument.URI,
 			Version:     (uint32)(textDocument.Version),
-			Diagnostics: util.Map(errors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
+			Diagnostics: diagnostics,
 		}
 
 		err := j.client.PublishDiagnostics(context.Background(), params)
 		if err != nil {
 			j.log.Error(fmt.Sprintf("Error publishing diagnostics: %v", err))
 		}
-	}(errors)
+	}(diagnostics)
 }
