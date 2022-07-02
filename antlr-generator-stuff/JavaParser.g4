@@ -590,7 +590,7 @@ methodCall
 
 expression
     : primary
-    | expression bop='.'
+    | expression dotop='.'
       (
          identifier
        | methodCall
@@ -599,16 +599,16 @@ expression
        | SUPER superSuffix
        | explicitGenericInvocation
       )
-    | expression '[' expression ']'
+    | expression indexop='[' expression ']'
     | methodCall
     | NEW creator
-    | '(' annotation* typeType ('&' typeType)* ')' expression
+    | castExpr
     | expression postfix=('++' | '--')
     | prefix=('+'|'-'|'++'|'--') expression
     | prefix=('~'|'!') expression
     | expression bop=('*'|'/'|'%') expression
     | expression bop=('+'|'-') expression
-    | expression ('<' '<' | '>' '>' '>' | '>' '>') expression
+    | expression bop=('<<' | '>>>' | '>>') expression
     | expression bop=('<=' | '>=' | '>' | '<') expression
     | expression bop=INSTANCEOF (typeType | pattern)
     | expression bop=('==' | '!=') expression
@@ -617,17 +617,22 @@ expression
     | expression bop='|' expression
     | expression bop='&&' expression
     | expression bop='||' expression
-    | <assoc=right> expression bop='?' expression ':' expression
+    // Ternary operator
+    | <assoc=right> expression tern='?' expression ':' expression
+    // Assignment
     | <assoc=right> expression
       bop=('=' | '+=' | '-=' | '*=' | '/=' | '&=' | '|=' | '^=' | '>>=' | '>>>=' | '<<=' | '%=')
       expression
     | lambdaExpression // Java8
     | switchExpression // Java17
-
     // Java 8 methodReference
     | expression '::' typeArguments? identifier
     | typeType '::' (typeArguments? identifier | NEW)
     | classType '::' typeArguments? NEW
+    ;
+
+castExpr
+    : '(' annotation* typeType ('&' typeType)* ')' expression
     ;
 
 // Java17

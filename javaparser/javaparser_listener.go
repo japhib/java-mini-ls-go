@@ -316,6 +316,9 @@ type JavaParserListener interface {
 	// EnterExpression is called when entering the expression production.
 	EnterExpression(c *ExpressionContext)
 
+	// EnterCastExpr is called when entering the castExpr production.
+	EnterCastExpr(c *CastExprContext)
+
 	// EnterPattern is called when entering the pattern production.
 	EnterPattern(c *PatternContext)
 
@@ -702,6 +705,9 @@ type JavaParserListener interface {
 
 	// ExitExpression is called when exiting the expression production.
 	ExitExpression(c *ExpressionContext)
+
+	// ExitCastExpr is called when exiting the castExpr production.
+	ExitCastExpr(c *CastExprContext)
 
 	// ExitPattern is called when exiting the pattern production.
 	ExitPattern(c *PatternContext)

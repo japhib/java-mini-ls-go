@@ -672,6 +672,12 @@ func (s *BaseJavaParserListener) EnterExpression(ctx *ExpressionContext) {}
 // ExitExpression is called when production expression is exited.
 func (s *BaseJavaParserListener) ExitExpression(ctx *ExpressionContext) {}
 
+// EnterCastExpr is called when production castExpr is entered.
+func (s *BaseJavaParserListener) EnterCastExpr(ctx *CastExprContext) {}
+
+// ExitCastExpr is called when production castExpr is exited.
+func (s *BaseJavaParserListener) ExitCastExpr(ctx *CastExprContext) {}
+
 // EnterPattern is called when production pattern is entered.
 func (s *BaseJavaParserListener) EnterPattern(ctx *PatternContext) {}
 

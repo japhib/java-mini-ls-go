@@ -2,12 +2,12 @@ package parse
 
 import (
 	"fmt"
+	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"go.lsp.dev/protocol"
+	"golang.org/x/exp/slices"
 	"java-mini-ls-go/javaparser"
 	"java-mini-ls-go/util"
-
-	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"golang.org/x/exp/slices"
+	"strings"
 )
 
 type TypeError struct {
@@ -259,13 +259,29 @@ func (tc *typeChecker) handleLiteral(ctx *javaparser.LiteralContext) {
 
 	intLit := ctx.IntegerLiteral()
 	if intLit != nil {
-		tc.pushExprTypeName("int", bounds)
+		typeName := "int"
+
+		intLitTxt := intLit.GetText()
+		lastChar := intLitTxt[len(intLitTxt)-1]
+		if lastChar == 'l' || lastChar == 'L' {
+			typeName = "long"
+		}
+
+		tc.pushExprTypeName(typeName, bounds)
 		return
 	}
 
 	floatLit := ctx.FloatLiteral()
 	if floatLit != nil {
-		tc.pushExprTypeName("float", bounds)
+		typeName := "double"
+
+		floatLitTxt := floatLit.GetText()
+		lastChar := floatLitTxt[len(floatLitTxt)-1]
+		if lastChar == 'f' || lastChar == 'F' {
+			typeName = "float"
+		}
+
+		tc.pushExprTypeName(typeName, bounds)
 		return
 	}
 
@@ -339,7 +355,12 @@ func (tc *typeChecker) ExitExpression(ctx *javaparser.ExpressionContext) {
 }
 
 // Binary operators that take in two numbers and return a number
-var arithmeticBops = []string{"+", "-", "*", "/", "%"}
+var arithmeticBops = util.SetFromValues("+", "-", "*", "/", "%", "+=", "-=", "*=", "/=", "%=")
+var bitshiftBops = util.SetFromValues(">>", ">>>", "<<", ">>=", ">>>=", "<<=")
+var comparisonBops = util.SetFromValues("<", ">", "<=", ">=")
+var bitwiseBops = util.SetFromValues("&", "|", "^", "&=", "|=", "^=")
+var equalityBops = util.SetFromValues("==", "!=")
+var booleanBops = util.SetFromValues("&&", "||", "&&=", "||=")
 
 func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds Bounds) {
 	left := tc.expressionStack.Pop()
@@ -368,23 +389,146 @@ func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds Bounds) {
 		return
 	}
 
-	if slices.Contains(arithmeticBops, bop) {
-		// right and left must both be numeric, and they will return a number
-		tc.assertIsNumeric(left)
-		tc.assertIsNumeric(right)
+	opType := "unknown"
+	assertionFunc := emptyTypeAssertion
+	returnTypeFunc := alwaysReturnsBoolean
+	// Some of the operators can contain = but are not assignment operators
+	definitelyNotAssignment := false
+
+	// Actually do the bop checking
+	if arithmeticBops.Contains(bop) {
+		opType = "arithmetic"
+		assertionFunc = assertIsNumeric
+		returnTypeFunc = determineArithmeticBopReturnType
+	} else if bitshiftBops.Contains(bop) {
+		opType = "bitshift"
+		assertionFunc = assertIsIntegral
+		returnTypeFunc = determineArithmeticBopReturnType
+	} else if bitwiseBops.Contains(bop) {
+		opType = "bitwise"
+		assertionFunc = assertIsIntegral
+		returnTypeFunc = determineArithmeticBopReturnType
+	} else if comparisonBops.Contains(bop) {
+		definitelyNotAssignment = true
+		opType = "comparison"
+		assertionFunc = assertIsNumeric
+		returnTypeFunc = alwaysReturnsBoolean
+	} else if equalityBops.Contains(bop) {
+		definitelyNotAssignment = true
+		opType = "equality"
+		assertionFunc = emptyTypeAssertion
+		returnTypeFunc = alwaysReturnsBoolean
+	} else if booleanBops.Contains(bop) {
+		opType = "boolean"
+		assertionFunc = assertIsBoolean
+		returnTypeFunc = alwaysReturnsBoolean
+	}
+
+	var returnType *JavaType
+
+	if !definitelyNotAssignment && strings.Contains(bop, "=") {
+		// Assignment is sort of a special case
+		opType = "assignment"
+		returnType = left.ttype
+	} else {
+		returnType = tc.determineBopReturnType(left, right, opType, assertionFunc, returnTypeFunc)
+	}
+
+	tc.expressionStack.Push(typedExpression{
+		loc:   exprBounds,
+		ttype: returnType,
+	})
+}
+
+func (tc *typeChecker) determineBopReturnType(left, right typedExpression, opType string, assertionFunc func(ttype *JavaType) bool, returnTypeFunc func(left *JavaType, right *JavaType) *JavaType) *JavaType {
+	// First check to make sure that both operands are valid types. If one is not, just return the other one.
+	assertionErrorFunc := func(expr typedExpression) {
+		tc.addError(TypeError{
+			Message: fmt.Sprintf("Cannot use %s operator on %s", opType, expr.ttype.Name),
+			Loc:     expr.loc,
+		})
+	}
+	if !assertionFunc(right.ttype) {
+		assertionErrorFunc(right)
+		return left.ttype
+	}
+	if !assertionFunc(left.ttype) {
+		assertionErrorFunc(left)
+		return right.ttype
+	}
+
+	// Then invoke returnTypeFunc to figure out what the new return type should be.
+	return returnTypeFunc(left.ttype, right.ttype)
+}
+
+var numericTypes = util.SetFromValues("byte", "char", "short", "int", "long", "float", "double")
+
+func assertIsNumeric(ttype *JavaType) bool {
+	return ttype.Type == JavaTypePrimitive && numericTypes.Contains(ttype.Name)
+}
+
+var integralTypes = util.SetFromValues("byte", "char", "short", "int", "long")
+
+func assertIsIntegral(ttype *JavaType) bool {
+	return ttype.Type == JavaTypePrimitive && integralTypes.Contains(ttype.Name)
+}
+
+func assertIsBoolean(ttype *JavaType) bool {
+	return ttype.Type == JavaTypePrimitive && ttype.Name == "boolean"
+}
+
+func emptyTypeAssertion(_ *JavaType) bool {
+	return true
+}
+
+// TODO char doesn't quite belong in this list, it's a bit of a special case
+// I think if you add 2 chars they stay a char
+// If you add a char to a short/byte it gets promoted to an int maybe? because char is unsigned
+var integralTypeWidths = []string{"byte", "short", "char", "int", "long"}
+
+// TODO this is for general arithmetic operators, it may be different for bitwise/bitshift ones
+// (e.g. right now this accepts Strings)
+func determineArithmeticBopReturnType(left *JavaType, right *JavaType) *JavaType {
+	// If either left or right is a String, it's a string concatenation
+	// so the return value is also a String
+	if left.Name == "String" {
+		return left
+	}
+	if right.Name == "String" {
+		return right
+	}
+
+	// If either left or right is a double, the return value is a double
+	if left.Name == "double" {
+		return left
+	}
+	if right.Name == "double" {
+		return right
+	}
+
+	// If left or right is a float, return value is a float
+	if left.Name == "float" {
+		return left
+	}
+	if right.Name == "float" {
+		return right
+	}
+
+	// Finally, if both are integral types, we return whichever is wider
+	return widerOfIntegralTypes(left, right)
+}
+
+func widerOfIntegralTypes(left *JavaType, right *JavaType) *JavaType {
+	idxOfLeft := slices.Index(integralTypeWidths, left.Name)
+	idxOfRight := slices.Index(integralTypeWidths, right.Name)
+
+	if idxOfLeft > idxOfRight {
+		return left
+	} else {
+		return right
 	}
 }
 
-var numericTypes = []string{"byte", "char", "short", "int", "long", "float", "double"}
-
-func (tc *typeChecker) assertIsNumeric(expression typedExpression) {
-	ttype := expression.ttype
-	isNumeric := ttype.Type == JavaTypePrimitive && slices.Contains(numericTypes, ttype.Name)
-
-	if !isNumeric {
-		tc.addError(TypeError{
-			Message: "Expected numeric type, instead got expression of type " + ttype.Name,
-			Loc:     expression.loc,
-		})
-	}
+func alwaysReturnsBoolean(_ *JavaType, _ *JavaType) *JavaType {
+	return getOrCreateBuiltinType("boolean")
 }
