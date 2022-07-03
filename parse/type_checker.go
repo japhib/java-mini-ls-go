@@ -7,6 +7,7 @@ import (
 	"golang.org/x/exp/slices"
 	"java-mini-ls-go/javaparser"
 	"java-mini-ls-go/util"
+	"math"
 	"strings"
 )
 
@@ -24,22 +25,23 @@ func (te *TypeError) ToDiagnostic() protocol.Diagnostic {
 	}
 }
 
+type TypeCheckResult struct {
+	TypeErrors      []TypeError
+	DefUsagesLookup DefinitionsUsagesLookup
+	RootScope       TypeCheckingScope
+}
+
 // CheckTypes traverses the given parse tree and performs type checking in all applicable
 // places. e.g. expressions, return statements, function calls, etc.
-func CheckTypes(tree antlr.Tree, fileURI string, userTypes TypeMap, builtins TypeMap) []TypeError {
-	visitor := &typeChecker{
-		currFileURI:     fileURI,
-		userTypes:       userTypes,
-		builtins:        builtins,
-		errors:          make([]TypeError, 0),
-		scopeTracker:    NewScopeTracker(),
-		typeScopes:      util.NewStack[*typeCheckingScope](),
-		expressionStack: util.NewStack[typedExpression](),
-	}
-
+func CheckTypes(tree antlr.Tree, fileURI string, userTypes TypeMap, builtins TypeMap) TypeCheckResult {
+	visitor := newTypeChecker(fileURI, userTypes, builtins)
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 
-	return visitor.errors
+	return TypeCheckResult{
+		TypeErrors:      visitor.errors,
+		DefUsagesLookup: visitor.defUsages,
+		RootScope:       visitor.rootScope,
+	}
 }
 
 type typedDeclarationCtx interface {
@@ -47,18 +49,30 @@ type typedDeclarationCtx interface {
 	VariableDeclarators() javaparser.IVariableDeclaratorsContext
 }
 
-type typeCheckingScope struct {
-	locals map[string]SymbolWithDefUsages
+type TypeCheckingScope struct {
+	Locals   map[string]SymbolWithDefUsages
+	Location Bounds
+	Parent   *TypeCheckingScope
+	Children []TypeCheckingScope
 }
 
-func newTypeCheckingScope() *typeCheckingScope {
-	return &typeCheckingScope{
-		locals: make(map[string]SymbolWithDefUsages),
+func newTypeCheckingScope(parent *TypeCheckingScope, bounds Bounds) TypeCheckingScope {
+	newScope := TypeCheckingScope{
+		Locals:   make(map[string]SymbolWithDefUsages),
+		Children: []TypeCheckingScope{},
+		Location: bounds,
 	}
+
+	if parent != nil {
+		newScope.Parent = parent
+		parent.Children = append(parent.Children, newScope)
+	}
+
+	return newScope
 }
 
-func (tcs *typeCheckingScope) addLocal(name string, ttype *JavaType, bounds Bounds, fileURI string) {
-	tcs.locals[name] = SymbolWithDefUsages{
+func (tcs *TypeCheckingScope) addLocal(name string, ttype *JavaType, bounds Bounds, fileURI string) {
+	tcs.Locals[name] = SymbolWithDefUsages{
 		SymbolName: name,
 		SymbolType: ttype,
 		Definition: CodeLocation{
@@ -85,7 +99,9 @@ type typeChecker struct {
 	builtins     TypeMap
 	errors       []TypeError
 	scopeTracker *ScopeTracker
-	typeScopes   util.Stack[*typeCheckingScope]
+	rootScope    TypeCheckingScope
+	currentScope *TypeCheckingScope
+	defUsages    DefinitionsUsagesLookup
 
 	// A stack used to keep track of the types of various expressions.
 	// For example, in the binary expression `9 + 10`:
@@ -94,6 +110,34 @@ type typeChecker struct {
 	// Then, the + binary expression gets evaluated, popping off the 2 last items
 	// from the stack and checking their types.
 	expressionStack util.Stack[typedExpression]
+}
+
+func newTypeChecker(fileURI string, userTypes TypeMap, builtins TypeMap) *typeChecker {
+	rootScope := newTypeCheckingScope(
+		nil,
+		// Bounds representing the entire file
+		Bounds{
+			Start: FileLocation{
+				Line:   0,
+				Column: 0,
+			},
+			End: FileLocation{
+				Line:   math.MaxInt,
+				Column: math.MaxInt,
+			},
+		},
+	)
+
+	return &typeChecker{
+		currFileURI:     fileURI,
+		userTypes:       userTypes,
+		builtins:        builtins,
+		errors:          make([]TypeError, 0),
+		scopeTracker:    NewScopeTracker(),
+		rootScope:       rootScope,
+		currentScope:    &rootScope,
+		expressionStack: util.NewStack[typedExpression](),
+	}
 }
 
 func (tc *typeChecker) addError(err TypeError) {
@@ -129,8 +173,8 @@ func (tc *typeChecker) pushExprTypeName(typeName string, bounds Bounds) {
 // checkAndAddLocal adds a local variable, while first checking whether the local
 // is already defined, and if so, adding an error.
 func (tc *typeChecker) checkAndAddLocal(name string, ttype *JavaType, bounds Bounds, scopeType string) {
-	topScope := tc.typeScopes.Top()
-	if _, ok := topScope.locals[name]; ok {
+	topScope := tc.currentScope
+	if _, ok := topScope.Locals[name]; ok {
 		currMethodName := tc.scopeTracker.ScopeStack.Top().Name
 		tc.addError(TypeError{
 			Loc:     bounds,
@@ -155,28 +199,30 @@ func (tc *typeChecker) getEnclosingType() *JavaType {
 func (tc *typeChecker) EnterEveryRule(ctx antlr.ParserRuleContext) {
 	newScope := tc.scopeTracker.CheckEnterScope(ctx)
 	if newScope != nil {
-		typeScope := newTypeCheckingScope()
+		bounds := ParserRuleContextToBounds(ctx)
+
+		typeScope := newTypeCheckingScope(tc.currentScope, bounds)
 
 		if newScope.Type.IsMethodType() {
-			// Add method params to locals.
+			// Add method params to Locals.
 			// First, look up method in types.
 			enclosingType := tc.getEnclosingType()
 			// TODO handle method overrides (same name)
 			method := enclosingType.Methods[newScope.Name]
 
 			for _, param := range method.Params {
-				typeScope.addLocal(param.Name, param.Type, ParserRuleContextToBounds(ctx), tc.currFileURI)
+				typeScope.addLocal(param.Name, param.Type, bounds, tc.currFileURI)
 			}
 		}
 
-		tc.typeScopes.Push(typeScope)
+		tc.currentScope = &typeScope
 	}
 }
 
 func (tc *typeChecker) ExitEveryRule(ctx antlr.ParserRuleContext) {
 	oldScope := tc.scopeTracker.CheckExitScope(ctx)
 	if oldScope != nil {
-		tc.typeScopes.Pop()
+		tc.currentScope = tc.currentScope.Parent
 	}
 }
 
@@ -328,8 +374,8 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 	identName := ctx.GetText()
 
 	// Is there a local by that name?
-	topTypeScope := tc.typeScopes.Top()
-	ident, ok := topTypeScope.locals[identName]
+	topTypeScope := tc.currentScope
+	ident, ok := topTypeScope.Locals[identName]
 	if ok {
 		tc.pushExprType(ident.SymbolType, bounds)
 		return

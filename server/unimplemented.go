@@ -99,10 +99,6 @@ func (j *JavaLS) Formatting(ctx context.Context, params *protocol.DocumentFormat
 	panic("Formatting unimplemented")
 }
 
-func (j *JavaLS) Hover(ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
-	panic("Hover unimplemented")
-}
-
 func (j *JavaLS) Implementation(ctx context.Context, params *protocol.ImplementationParams) ([]protocol.Location, error) {
 	panic("Implementation unimplemented")
 }

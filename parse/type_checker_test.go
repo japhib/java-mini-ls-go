@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func parseAndTypeCheck(t *testing.T, code string) []TypeError {
+func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
 	// Make sure to load built-in types
 	_, err := LoadBuiltinTypes()
 	if err != nil {
@@ -25,17 +25,18 @@ func parseAndTypeCheck(t *testing.T, code string) []TypeError {
 }
 
 func TestCheckTypes_Addition(t *testing.T) {
-	typeErrors := parseAndTypeCheck(t, `
+	typeCheckResult := parseAndTypeCheck(t, `
 public class MainClass {
 	public int add() {
 		return 2 + 1;
 	}
 }`)
+	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
 }
 
 func TestCheckTypes_Params(t *testing.T) {
-	typeErrors := parseAndTypeCheck(t, `
+	typeCheckResult := parseAndTypeCheck(t, `
 public class MainClass {
 	public int addOne(int a) {
 		return a + 1;
@@ -45,11 +46,12 @@ public class MainClass {
 		return a + b;
 	}
 }`)
+	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
 }
 
 func TestCheckTypes_ClassVars(t *testing.T) {
-	typeErrors := parseAndTypeCheck(t, `
+	typeCheckResult := parseAndTypeCheck(t, `
 public class MainClass {
 	int aA;
 	static double bB;
@@ -62,11 +64,12 @@ public class MainClass {
 		return b + bB;
 	}
 }`)
+	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
 }
 
 func TestCheckTypes_ClassVarsInSuperclass(t *testing.T) {
-	typeErrors := parseAndTypeCheck(t, `
+	typeCheckResult := parseAndTypeCheck(t, `
 public class Parent {
 	int aA;
 	static double bB;
@@ -83,22 +86,24 @@ public class MainClass extends Parent {
 		return b + bB;
 	}
 }`)
+	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
 }
 
 func TestCheckTypes_AddsLocalVars(t *testing.T) {
-	typeErrors := parseAndTypeCheck(t, `
+	typeCheckResult := parseAndTypeCheck(t, `
 public class MainClass {
 	public int add() {
 		int a = 1;
 		return a + 1;
 	}
 }`)
+	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
 }
 
 func TestCheckTypes_CheckLocalVars(t *testing.T) {
-	typeErrors := parseAndTypeCheck(t, `
+	typeCheckResult := parseAndTypeCheck(t, `
 public class MainClass {
 	int a = 1, b = 2, c = 3;
 
@@ -106,14 +111,16 @@ public class MainClass {
 		int d = 4, e = 5, f = 6;
 	}
 }`)
+	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
 }
 
 func TestCheckTypes_CheckFieldVars_Errors(t *testing.T) {
-	typeErrors := parseAndTypeCheck(t, `
+	typeCheckResult := parseAndTypeCheck(t, `
 public class MainClass {
 	int a = 1, b = "hi";
 }`)
+	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{
 		{
 			Loc: Bounds{
@@ -132,12 +139,13 @@ public class MainClass {
 }
 
 func TestCheckTypes_CheckLocalVars_Errors(t *testing.T) {
-	typeErrors := parseAndTypeCheck(t, `
+	typeCheckResult := parseAndTypeCheck(t, `
 public class MainClass {
 	public void add() {
 		String c = "f", a = 5;
 	}
 }`)
+	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{
 		{
 			Loc: Bounds{
@@ -156,13 +164,14 @@ public class MainClass {
 }
 
 func TestCheckTypes_CheckLocalVars_ErrorRedefined(t *testing.T) {
-	typeErrors := parseAndTypeCheck(t, `
+	typeCheckResult := parseAndTypeCheck(t, `
 public class MainClass {
 	public void add() {
 		int a;
 		int a = 1;
 	}
 }`)
+	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{
 		{
 			Loc: Bounds{
@@ -181,12 +190,13 @@ public class MainClass {
 }
 
 func TestCheckTypes_CheckVarDecl(t *testing.T) {
-	typeErrors := parseAndTypeCheck(t, `
+	typeCheckResult := parseAndTypeCheck(t, `
 public class MainClass {
 	public void add() {
 		var a = "hi";
 		String b = a;
 	}
 }`)
+	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
 }

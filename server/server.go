@@ -119,7 +119,8 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	j.symbols.Set(uriString, symbols)
 
 	userTypes := parse.GatherTypes(parsed, j.builtinTypes)
-	typeErrors := parse.CheckTypes(parsed, uriString, userTypes, j.builtinTypes)
+	typeCheckingResult := parse.CheckTypes(parsed, uriString, userTypes, j.builtinTypes)
+	typeErrors := typeCheckingResult.TypeErrors
 
 	diagnostics := util.CombineSlices(
 		util.Map(syntaxErrors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
@@ -174,4 +175,8 @@ func (j *JavaLS) DocumentSymbol(_ context.Context, params *protocol.DocumentSymb
 	}
 
 	return ret, nil
+}
+
+func (j *JavaLS) Hover(ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
+	return nil, nil
 }
