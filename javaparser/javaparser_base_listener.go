@@ -562,6 +562,18 @@ func (s *BaseJavaParserListener) EnterLocalVariableDeclaration(ctx *LocalVariabl
 // ExitLocalVariableDeclaration is called when production localVariableDeclaration is exited.
 func (s *BaseJavaParserListener) ExitLocalVariableDeclaration(ctx *LocalVariableDeclarationContext) {}
 
+// EnterTypedLocalVarDecl is called when production typedLocalVarDecl is entered.
+func (s *BaseJavaParserListener) EnterTypedLocalVarDecl(ctx *TypedLocalVarDeclContext) {}
+
+// ExitTypedLocalVarDecl is called when production typedLocalVarDecl is exited.
+func (s *BaseJavaParserListener) ExitTypedLocalVarDecl(ctx *TypedLocalVarDeclContext) {}
+
+// EnterUntypedLocalVarDecl is called when production untypedLocalVarDecl is entered.
+func (s *BaseJavaParserListener) EnterUntypedLocalVarDecl(ctx *UntypedLocalVarDeclContext) {}
+
+// ExitUntypedLocalVarDecl is called when production untypedLocalVarDecl is exited.
+func (s *BaseJavaParserListener) ExitUntypedLocalVarDecl(ctx *UntypedLocalVarDeclContext) {}
+
 // EnterIdentifier is called when production identifier is entered.
 func (s *BaseJavaParserListener) EnterIdentifier(ctx *IdentifierContext) {}
 

@@ -34,11 +34,34 @@ Java standard library (packages like java.lang, java.util)
 - Doesn't do fully-qualified class name resolution. So e.g. if you define a class
 called `Object`, you'll get all sorts of weird behavior as the language server will
 mix up your `Object` class with `java.lang.Object`
+- Low unit test coverage (currently 50% or less)
+
+## Ideas for useful features beyond compile errors
+
+It's great when the IDE can show how to 
+
+- Corrections for common mistakes such as:
+  - using == on a String
+  - Unused local variable
+  - Local variable shadows an instance variable
+- Common actions such as:
+  - Finding and adding imports to top of file
+  - Formatting the file (should be configurable)
+  - Adding an optional parameter to a method
+- Suggestions for when a method can be made static
+- Automatic refactors:
+  - Symbol renames
+  - Extract method
+  - Change the signature of a method
+  - Change imperative for-loops into FP-style streams
+  - Turn assigning/returning if statements into ?: conditional expressions
+  - Turn index-based for loops into for-range loops
+  - Use new switch expressions & pattern-matching where possible
 
 # Credit
 
+- [Replit](https://replit.com) for the motivation
 - [github.com/antlr/antlr4](https://github.com/antlr/antlr4) for parsing
 - [go.lsp.dev/protocol](https://github.com/go-language-server/protocol) for the LSP implementation
 - [github.com/micnncim/protocol-buffers-language-server](https://github.com/micnncim/protocol-buffers-language-server) for showing me how to use `go.lsp.dev/protocol`
-- [Replit](https://replit.com) for the motivation
 - [Java spec](https://docs.oracle.com/javase/specs/jls/se18/html/jls-15.html)

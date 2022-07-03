@@ -54,13 +54,11 @@ func RunServer(ctx context.Context, logger *zap.Logger, stream jsonrpc2.Stream) 
 func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
 	j.log.Info("Initialize")
 
-	if j.ReadStdlibTypes {
-		var err error
-		j.builtinTypes, err = parse.LoadBuiltinTypes()
-		if err != nil {
-			j.log.Error(err.Error())
-			return nil, err
-		}
+	var err error
+	j.builtinTypes, err = parse.LoadBuiltinTypes()
+	if err != nil {
+		j.log.Error(err.Error())
+		return nil, err
 	}
 
 	return &protocol.InitializeResult{
@@ -112,7 +110,7 @@ func (j *JavaLS) DidChange(_ context.Context, params *protocol.DidChangeTextDocu
 }
 
 func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
-	uriString := (string)(textDocument.URI)
+	uriString := string(textDocument.URI)
 	j.documentTextCache.Set(uriString, textDocument)
 
 	parsed, syntaxErrors := parse.Parse(textDocument.Text)
@@ -121,7 +119,7 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	j.symbols.Set(uriString, symbols)
 
 	userTypes := parse.GatherTypes(parsed, j.builtinTypes)
-	typeErrors := parse.CheckTypes(parsed, userTypes, j.builtinTypes)
+	typeErrors := parse.CheckTypes(parsed, uriString, userTypes, j.builtinTypes)
 
 	diagnostics := util.CombineSlices(
 		util.Map(syntaxErrors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
@@ -165,7 +163,7 @@ func convertToDocumentSymbols(codeSymbols []*parse.CodeSymbol) []protocol.Docume
 func (j *JavaLS) DocumentSymbol(_ context.Context, params *protocol.DocumentSymbolParams) ([]interface{}, error) {
 	ret := make([]interface{}, 0)
 
-	symbols, _ := j.symbols.Get((string)(params.TextDocument.URI))
+	symbols, _ := j.symbols.Get(string(params.TextDocument.URI))
 
 	if symbols != nil {
 		docSymbols := convertToDocumentSymbols(symbols)

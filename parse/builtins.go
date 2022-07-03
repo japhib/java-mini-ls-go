@@ -107,17 +107,12 @@ func loadBuiltinTypesFromDisk() error {
 }
 
 func readJsonFromDisk() ([]javaJsonType, error) {
-	execPath, err := os.Executable()
+	stdlibJsonPath, err := getStdlibJsonPath()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "Error getting path of Java stdlib json file")
 	}
 
-	absPath, err := filepath.Abs(filepath.Dir(execPath))
-	if err != nil {
-		return nil, err
-	}
-
-	filename := filepath.Join(absPath, "java_stdlib.json")
+	filename := filepath.Join(stdlibJsonPath, "java_stdlib.json")
 	jsonFile, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -143,6 +138,26 @@ func readJsonFromDisk() ([]javaJsonType, error) {
 	}
 
 	return types, nil
+}
+
+func getStdlibJsonPath() (string, error) {
+	envPath := os.Getenv("JAVA_MINI_LS_STDLIB_PATH")
+	if envPath != "" {
+		return envPath, nil
+	}
+
+	// Env var not set, look up from executable location
+	execPath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+
+	absPath, err := filepath.Abs(filepath.Dir(execPath))
+	if err != nil {
+		return "", err
+	}
+
+	return absPath, nil
 }
 
 func addPrimitiveTypes(typeMap TypeMap) {
@@ -254,7 +269,7 @@ func toArg(arg javaJsonArg) *JavaParameter {
 func getOrCreateBuiltinType(name string) *JavaType {
 	jtype, ok := builtinTypes[name]
 	if !ok {
-		fmt.Println("Creating built-in type: ", name)
+		//fmt.Println("Creating built-in type: ", name)
 		jtype = &JavaType{
 			Name:       name,
 			Visibility: VisibilityPublic,

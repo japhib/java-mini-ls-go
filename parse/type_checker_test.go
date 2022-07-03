@@ -6,6 +6,12 @@ import (
 )
 
 func parseAndTypeCheck(t *testing.T, code string) []TypeError {
+	// Make sure to load built-in types
+	_, err := LoadBuiltinTypes()
+	if err != nil {
+		t.Fatalf("Error loading builtin types: %s", err.Error())
+	}
+
 	tree, parseErrors := Parse(code)
 	assert.Equal(t, 0, len(parseErrors))
 
@@ -15,7 +21,7 @@ func parseAndTypeCheck(t *testing.T, code string) []TypeError {
 	addPrimitiveTypes(builtins)
 	userTypes := GatherTypes(tree, builtins)
 
-	return CheckTypes(tree, userTypes, builtins)
+	return CheckTypes(tree, "type_checker_test", userTypes, builtins)
 }
 
 func TestCheckTypes_Addition(t *testing.T) {
@@ -161,15 +167,26 @@ public class MainClass {
 		{
 			Loc: Bounds{
 				Start: FileLocation{
-					Line:   4,
-					Column: 22,
+					Line:   5,
+					Column: 2,
 				},
 				End: FileLocation{
-					Line:   4,
-					Column: 22,
+					Line:   5,
+					Column: 10,
 				},
 			},
-			Message: "Local variable a was defined previously",
+			Message: "Variable a is already defined in method add",
 		},
 	}, typeErrors)
+}
+
+func TestCheckTypes_CheckVarDecl(t *testing.T) {
+	typeErrors := parseAndTypeCheck(t, `
+public class MainClass {
+	public void add() {
+		var a = "hi";
+		String b = a;
+	}
+}`)
+	assert.Equal(t, []TypeError{}, typeErrors)
 }

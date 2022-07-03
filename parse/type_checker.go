@@ -26,13 +26,15 @@ func (te *TypeError) ToDiagnostic() protocol.Diagnostic {
 
 // CheckTypes traverses the given parse tree and performs type checking in all applicable
 // places. e.g. expressions, return statements, function calls, etc.
-func CheckTypes(tree antlr.Tree, userTypes TypeMap, builtins TypeMap) []TypeError {
+func CheckTypes(tree antlr.Tree, fileURI string, userTypes TypeMap, builtins TypeMap) []TypeError {
 	visitor := &typeChecker{
-		scopeTracker: NewScopeTracker(),
-		userTypes:    userTypes,
-		builtins:     builtins,
-		errors:       make([]TypeError, 0),
-		typeScopes:   util.NewStack[*typeCheckingScope](),
+		currFileURI:     fileURI,
+		userTypes:       userTypes,
+		builtins:        builtins,
+		errors:          make([]TypeError, 0),
+		scopeTracker:    NewScopeTracker(),
+		typeScopes:      util.NewStack[*typeCheckingScope](),
+		expressionStack: util.NewStack[typedExpression](),
 	}
 
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
@@ -45,25 +47,25 @@ type typedDeclarationCtx interface {
 	VariableDeclarators() javaparser.IVariableDeclaratorsContext
 }
 
-type localVar struct {
-	name  string
-	ttype *JavaType
-}
-
 type typeCheckingScope struct {
-	locals map[string]localVar
+	locals map[string]SymbolWithDefUsages
 }
 
 func newTypeCheckingScope() *typeCheckingScope {
 	return &typeCheckingScope{
-		locals: make(map[string]localVar),
+		locals: make(map[string]SymbolWithDefUsages),
 	}
 }
 
-func (tcs *typeCheckingScope) addLocal(name string, ttype *JavaType) {
-	tcs.locals[name] = localVar{
-		name:  name,
-		ttype: ttype,
+func (tcs *typeCheckingScope) addLocal(name string, ttype *JavaType, bounds Bounds, fileURI string) {
+	tcs.locals[name] = SymbolWithDefUsages{
+		SymbolName: name,
+		SymbolType: ttype,
+		Definition: CodeLocation{
+			FileUri: fileURI,
+			Loc:     bounds,
+		},
+		Usages: make([]CodeLocation, 0),
 	}
 }
 
@@ -78,6 +80,7 @@ func (te typedExpression) String() string {
 
 type typeChecker struct {
 	javaparser.BaseJavaParserListener
+	currFileURI  string
 	userTypes    TypeMap
 	builtins     TypeMap
 	errors       []TypeError
@@ -135,7 +138,7 @@ func (tc *typeChecker) checkAndAddLocal(name string, ttype *JavaType, bounds Bou
 		})
 	}
 
-	topScope.addLocal(name, ttype)
+	topScope.addLocal(name, ttype, bounds, tc.currFileURI)
 }
 
 func (tc *typeChecker) getEnclosingType() *JavaType {
@@ -162,7 +165,7 @@ func (tc *typeChecker) EnterEveryRule(ctx antlr.ParserRuleContext) {
 			method := enclosingType.Methods[newScope.Name]
 
 			for _, param := range method.Params {
-				typeScope.addLocal(param.Name, param.Type)
+				typeScope.addLocal(param.Name, param.Type, ParserRuleContextToBounds(ctx), tc.currFileURI)
 			}
 		}
 
@@ -192,10 +195,13 @@ func (tc *typeChecker) ExitFieldDeclaration(ctx *javaparser.FieldDeclarationCont
 }
 
 func (tc *typeChecker) ExitLocalVariableDeclaration(ctx *javaparser.LocalVariableDeclarationContext) {
-	if ctx.VAR() == nil {
-		tc.handleTypedVariableDecl(ctx, ParserRuleContextToBounds(ctx), true)
+	typedI := ctx.TypedLocalVarDecl()
+	if typedI != nil {
+		typed := typedI.(*javaparser.TypedLocalVarDeclContext)
+		tc.handleTypedVariableDecl(typed, ParserRuleContextToBounds(ctx), true)
 	} else {
-		tc.handleUntypedLocalVariableDecl(ctx, ParserRuleContextToBounds(ctx))
+		untyped := ctx.UntypedLocalVarDecl().(*javaparser.UntypedLocalVarDeclContext)
+		tc.handleUntypedLocalVariableDecl(untyped, ParserRuleContextToBounds(ctx))
 	}
 }
 
@@ -235,7 +241,7 @@ func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx, bounds B
 }
 
 // e.g. `var a = "hi"`
-func (tc *typeChecker) handleUntypedLocalVariableDecl(ctx *javaparser.LocalVariableDeclarationContext, bounds Bounds) {
+func (tc *typeChecker) handleUntypedLocalVariableDecl(ctx *javaparser.UntypedLocalVarDeclContext, bounds Bounds) {
 	// In order for type to be inferred, we must have already pushed the expression type
 	ttype := tc.expressionStack.Pop().ttype
 
@@ -325,7 +331,7 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 	topTypeScope := tc.typeScopes.Top()
 	ident, ok := topTypeScope.locals[identName]
 	if ok {
-		tc.pushExprType(ident.ttype, bounds)
+		tc.pushExprType(ident.SymbolType, bounds)
 		return
 	}
 
@@ -363,29 +369,25 @@ var equalityBops = util.SetFromValues("==", "!=")
 var booleanBops = util.SetFromValues("&&", "||", "&&=", "||=")
 
 func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds Bounds) {
-	left := tc.expressionStack.Pop()
 	right := tc.expressionStack.Pop()
-	// TODO panic instead of adding error(s) when we're more confident
-	if right.ttype == nil {
+	left := tc.expressionStack.Pop()
+
+	exprNilFunc := func(side string) {
 		tc.addError(TypeError{
-			Message: "TODO: right expression is nil",
+			Message: fmt.Sprintf("TODO: %s expression is nil (this shouldn't happen, contact extension maintainers)", side),
 			Loc:     exprBounds,
 		})
 		tc.expressionStack.Push(typedExpression{
 			loc:   exprBounds,
 			ttype: tc.lookupType("Object"),
 		})
+	}
+	if right.ttype == nil {
+		exprNilFunc("right")
 		return
 	}
 	if left.ttype == nil {
-		tc.addError(TypeError{
-			Message: "TODO: left expression is nil",
-			Loc:     exprBounds,
-		})
-		tc.expressionStack.Push(typedExpression{
-			loc:   exprBounds,
-			ttype: tc.lookupType("Object"),
-		})
+		exprNilFunc("left")
 		return
 	}
 
@@ -427,7 +429,8 @@ func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds Bounds) {
 	var returnType *JavaType
 
 	if !definitelyNotAssignment && strings.Contains(bop, "=") {
-		// Assignment is sort of a special case
+		// Assignment is sort of a special case.
+		// Always returns the type of the left element
 		opType = "assignment"
 		returnType = left.ttype
 	} else {

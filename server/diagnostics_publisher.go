@@ -17,7 +17,7 @@ func (rdp *RealDiagnosticsPublisher) PublishDiagnostics(j *JavaLS, textDocument 
 	go func(diagnostics []protocol.Diagnostic) {
 		params := &protocol.PublishDiagnosticsParams{
 			URI:         textDocument.URI,
-			Version:     (uint32)(textDocument.Version),
+			Version:     uint32(textDocument.Version),
 			Diagnostics: diagnostics,
 		}
 

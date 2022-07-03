@@ -39,12 +39,12 @@ func BoundsToRange(bounds Bounds) protocol.Range {
 	return protocol.Range{
 		Start: protocol.Position{
 			// Subtract 1 since we use 1-based line numbers but LSP expects 0-based
-			Line:      (uint32)(bounds.Start.Line) - 1,
-			Character: (uint32)(bounds.Start.Column),
+			Line:      uint32(bounds.Start.Line) - 1,
+			Character: uint32(bounds.Start.Column),
 		},
 		End: protocol.Position{
-			Line:      (uint32)(bounds.End.Line) - 1,
-			Character: (uint32)(bounds.End.Column),
+			Line:      uint32(bounds.End.Line) - 1,
+			Character: uint32(bounds.End.Column),
 		},
 	}
 }
@@ -59,4 +59,24 @@ func (b Bounds) String() string {
 	} else {
 		return fmt.Sprintf("%d:%d-%d", b.Start.Line, b.Start.Column, b.End.Column)
 	}
+}
+
+func (b Bounds) Size() int {
+	lineSize := b.End.Line - b.Start.Line
+
+	columnSize := 0
+	if lineSize == 0 {
+		columnSize = b.End.Column - b.Start.Column
+	}
+
+	return (lineSize * 10000) + columnSize
+}
+
+type CodeLocation struct {
+	FileUri string
+	Loc     Bounds
+}
+
+func (cl CodeLocation) Equals(other CodeLocation) bool {
+	return cl.FileUri == other.FileUri && cl.Loc.Equals(other.Loc)
 }

@@ -471,7 +471,15 @@ blockStatement
     ;
 
 localVariableDeclaration
-    : variableModifier* (typeType variableDeclarators | VAR identifier '=' expression)
+    : variableModifier* (untypedLocalVarDecl | typedLocalVarDecl)
+    ;
+
+typedLocalVarDecl
+    : typeType variableDeclarators
+    ;
+
+untypedLocalVarDecl
+    : VAR identifier '=' expression
     ;
 
 identifier

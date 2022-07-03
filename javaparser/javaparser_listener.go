@@ -262,6 +262,12 @@ type JavaParserListener interface {
 	// EnterLocalVariableDeclaration is called when entering the localVariableDeclaration production.
 	EnterLocalVariableDeclaration(c *LocalVariableDeclarationContext)
 
+	// EnterTypedLocalVarDecl is called when entering the typedLocalVarDecl production.
+	EnterTypedLocalVarDecl(c *TypedLocalVarDeclContext)
+
+	// EnterUntypedLocalVarDecl is called when entering the untypedLocalVarDecl production.
+	EnterUntypedLocalVarDecl(c *UntypedLocalVarDeclContext)
+
 	// EnterIdentifier is called when entering the identifier production.
 	EnterIdentifier(c *IdentifierContext)
 
@@ -651,6 +657,12 @@ type JavaParserListener interface {
 
 	// ExitLocalVariableDeclaration is called when exiting the localVariableDeclaration production.
 	ExitLocalVariableDeclaration(c *LocalVariableDeclarationContext)
+
+	// ExitTypedLocalVarDecl is called when exiting the typedLocalVarDecl production.
+	ExitTypedLocalVarDecl(c *TypedLocalVarDeclContext)
+
+	// ExitUntypedLocalVarDecl is called when exiting the untypedLocalVarDecl production.
+	ExitUntypedLocalVarDecl(c *UntypedLocalVarDeclContext)
 
 	// ExitIdentifier is called when exiting the identifier production.
 	ExitIdentifier(c *IdentifierContext)
