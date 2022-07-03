@@ -1,12 +1,13 @@
-package parse
+package typecheck
 
 import (
 	"github.com/stretchr/testify/assert"
+	"java-mini-ls-go/parse"
 	"testing"
 )
 
 func TestGatherTypes_Basic(t *testing.T) {
-	tree, errors := Parse(`
+	tree, errors := parse.Parse(`
 package stuff;
 
 import somepkg.Thing;
@@ -30,26 +31,26 @@ public class Main {
 }`)
 	assert.Equal(t, 0, len(errors))
 
-	strType := &JavaType{
+	strType := &parse.JavaType{
 		Name: "String",
 	}
 
-	builtins := TypeMap{
+	builtins := parse.TypeMap{
 		"String": strType,
 	}
 
 	types := GatherTypes(tree, builtins)
 
-	expectedTypes := TypeMap{
+	expectedTypes := parse.TypeMap{
 		"Main": {
 			Name:    "Main",
 			Package: "stuff",
-			Methods: map[string]*JavaMethod{
+			Methods: map[string]*parse.JavaMethod{
 				"main": {
 					Name: "main",
 					// void -> nil
 					ReturnType: nil,
-					Params: []*JavaParameter{
+					Params: []*parse.JavaParameter{
 						{
 							Name:      "args",
 							Type:      strType,
@@ -58,11 +59,11 @@ public class Main {
 					},
 				},
 			},
-			Constructors: []*JavaConstructor{},
-			Fields:       map[string]*JavaField{},
-			Type:         JavaTypeClass,
-			Extends:      []*JavaType{},
-			Implements:   []*JavaType{},
+			Constructors: []*parse.JavaConstructor{},
+			Fields:       map[string]*parse.JavaField{},
+			Type:         parse.JavaTypeClass,
+			Extends:      []*parse.JavaType{},
+			Implements:   []*parse.JavaType{},
 		},
 	}
 
@@ -70,7 +71,7 @@ public class Main {
 }
 
 func TestGatherTypes_NestedClass(t *testing.T) {
-	tree, errors := Parse(`
+	tree, errors := parse.Parse(`
 class MyClass {
 	public String name;
 	public int asdf;
@@ -91,39 +92,39 @@ class MyClass {
 }`)
 	assert.Equal(t, 0, len(errors))
 
-	strType := &JavaType{
+	strType := &parse.JavaType{
 		Name: "String",
 	}
-	intType := &JavaType{
+	intType := &parse.JavaType{
 		Name: "int",
 	}
 
-	builtins := TypeMap{
+	builtins := parse.TypeMap{
 		"String": strType,
 		"int":    intType,
 	}
 
 	types := GatherTypes(tree, builtins)
 
-	nestedType := &JavaType{
+	nestedType := &parse.JavaType{
 		Name: "Nested",
-		Type: JavaTypeClass,
-		Fields: map[string]*JavaField{
+		Type: parse.JavaTypeClass,
+		Fields: map[string]*parse.JavaField{
 			"nestedInt": {
 				Name: "nestedInt",
 				Type: intType,
 			},
 		},
-		Constructors: []*JavaConstructor{},
-		Methods:      map[string]*JavaMethod{},
-		Extends:      []*JavaType{},
-		Implements:   []*JavaType{},
+		Constructors: []*parse.JavaConstructor{},
+		Methods:      map[string]*parse.JavaMethod{},
+		Extends:      []*parse.JavaType{},
+		Implements:   []*parse.JavaType{},
 	}
 
-	expectedTypes := TypeMap{
+	expectedTypes := parse.TypeMap{
 		"MyClass": {
 			Name: "MyClass",
-			Fields: map[string]*JavaField{
+			Fields: map[string]*parse.JavaField{
 				"name": {
 					Name: "name",
 					Type: strType,
@@ -137,9 +138,9 @@ class MyClass {
 					Type: nestedType,
 				},
 			},
-			Constructors: []*JavaConstructor{
+			Constructors: []*parse.JavaConstructor{
 				{
-					Arguments: []*JavaParameter{
+					Arguments: []*parse.JavaParameter{
 						{
 							Name: "f",
 							Type: intType,
@@ -147,16 +148,16 @@ class MyClass {
 					},
 				},
 			},
-			Methods: map[string]*JavaMethod{
+			Methods: map[string]*parse.JavaMethod{
 				"DoSomething": {
 					Name:       "DoSomething",
 					ReturnType: intType,
-					Params:     []*JavaParameter{},
+					Params:     []*parse.JavaParameter{},
 				},
 			},
-			Type:       JavaTypeClass,
-			Extends:    []*JavaType{},
-			Implements: []*JavaType{},
+			Type:       parse.JavaTypeClass,
+			Extends:    []*parse.JavaType{},
+			Implements: []*parse.JavaType{},
 		},
 		"Nested": nestedType,
 	}
@@ -165,7 +166,7 @@ class MyClass {
 }
 
 func TestGatherTypes_Enum(t *testing.T) {
-	tree, errors := Parse(`
+	tree, errors := parse.Parse(`
 enum MyEnum {
   First("f"), Second("s"), Third("t");
 
@@ -181,17 +182,17 @@ enum MyEnum {
 }`)
 	assert.Equal(t, 0, len(errors))
 
-	strType := &JavaType{Name: "String"}
-	builtins := TypeMap{"String": strType}
+	strType := &parse.JavaType{Name: "String"}
+	builtins := parse.TypeMap{"String": strType}
 	types := GatherTypes(tree, builtins)
 
-	expectedTypes := TypeMap{
-		"MyEnum": &JavaType{
+	expectedTypes := parse.TypeMap{
+		"MyEnum": &parse.JavaType{
 			Name: "MyEnum",
-			Type: JavaTypeEnum,
-			Constructors: []*JavaConstructor{
+			Type: parse.JavaTypeEnum,
+			Constructors: []*parse.JavaConstructor{
 				{
-					Arguments: []*JavaParameter{
+					Arguments: []*parse.JavaParameter{
 						{
 							Name: "v",
 							Type: strType,
@@ -199,17 +200,17 @@ enum MyEnum {
 					},
 				},
 			},
-			Fields: map[string]*JavaField{
+			Fields: map[string]*parse.JavaField{
 				"value": {
 					Name: "value",
 					Type: strType,
 				},
 			},
-			Methods: map[string]*JavaMethod{
+			Methods: map[string]*parse.JavaMethod{
 				"getValue": {
 					Name:       "getValue",
 					ReturnType: strType,
-					Params:     []*JavaParameter{},
+					Params:     []*parse.JavaParameter{},
 				},
 			},
 		},

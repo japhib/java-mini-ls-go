@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/pkg/errors"
 	"java-mini-ls-go/parse"
+	"java-mini-ls-go/parse/typecheck"
 	"java-mini-ls-go/util"
 
 	"go.lsp.dev/jsonrpc2"
@@ -21,6 +23,8 @@ type JavaLS struct {
 
 	documentTextCache *util.SyncMap[string, protocol.TextDocumentItem]
 	symbols           *util.SyncMap[string, []*parse.CodeSymbol]
+	scopes            *util.SyncMap[string, typecheck.TypeCheckingScope]
+	defUsages         *util.SyncMap[string, *typecheck.DefinitionsUsagesLookup]
 	builtinTypes      map[string]*parse.JavaType
 
 	// Dependencies that can be mocked for testing
@@ -36,6 +40,8 @@ func NewServer(ctx context.Context, logger *zap.Logger) *JavaLS {
 		log:                  logger,
 		documentTextCache:    util.NewSyncMap[string, protocol.TextDocumentItem](),
 		symbols:              util.NewSyncMap[string, []*parse.CodeSymbol](),
+		scopes:               util.NewSyncMap[string, typecheck.TypeCheckingScope](),
+		defUsages:            util.NewSyncMap[string, *typecheck.DefinitionsUsagesLookup](),
 		builtinTypes:         make(map[string]*parse.JavaType),
 		diagnosticsPublisher: &RealDiagnosticsPublisher{},
 	}
@@ -74,6 +80,7 @@ func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams
 				},
 			},
 			DocumentSymbolProvider: true,
+			HoverProvider:          true,
 		},
 	}, nil
 }
@@ -118,13 +125,15 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	symbols := parse.FindSymbols(parsed)
 	j.symbols.Set(uriString, symbols)
 
-	userTypes := parse.GatherTypes(parsed, j.builtinTypes)
-	typeCheckingResult := parse.CheckTypes(parsed, uriString, userTypes, j.builtinTypes)
-	typeErrors := typeCheckingResult.TypeErrors
+	userTypes := typecheck.GatherTypes(parsed, j.builtinTypes)
+	typeCheckingResult := typecheck.CheckTypes(parsed, uriString, userTypes, j.builtinTypes)
+	j.scopes.Set(uriString, typeCheckingResult.RootScope)
+	j.defUsages.Set(uriString, typeCheckingResult.DefUsagesLookup)
 
+	typeErrors := typeCheckingResult.TypeErrors
 	diagnostics := util.CombineSlices(
 		util.Map(syntaxErrors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
-		util.Map(typeErrors, func(se parse.TypeError) protocol.Diagnostic { return se.ToDiagnostic() }),
+		util.Map(typeErrors, func(se typecheck.TypeError) protocol.Diagnostic { return se.ToDiagnostic() }),
 	)
 
 	j.diagnosticsPublisher.PublishDiagnostics(j, textDocument, diagnostics)
@@ -178,5 +187,71 @@ func (j *JavaLS) DocumentSymbol(_ context.Context, params *protocol.DocumentSymb
 }
 
 func (j *JavaLS) Hover(ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
+	textOnLine, err := j.getTextOnLine(string(params.TextDocument.URI), int(params.Position.Line))
+	if textOnLine == "" {
+		return nil, errors.Wrapf(err, "can't get document text on line %d", int(params.Position.Line))
+	}
+
+	// Check if it's a local
+	lookup, ok := j.defUsages.Get(string(params.TextDocument.URI))
+	if ok {
+		symbol := lookup.Lookup(parse.FileLocation{
+			Line:   int(params.Position.Line) + 1,
+			Column: int(params.Position.Character),
+		})
+		if symbol != nil {
+			// For now just return the variable name + type
+			return &protocol.Hover{Contents: protocol.MarkupContent{
+				Kind:  protocol.Markdown,
+				Value: fmt.Sprintf("**%s** %s", symbol.SymbolName, symbol.SymbolType.Name),
+			}}, nil
+		}
+	}
+
 	return nil, nil
+}
+
+// NOTE: line is 0-based here (LSP style)
+func (j *JavaLS) getTextOnLine(fileURI string, line int) (string, error) {
+	text, ok := j.documentTextCache.Get(fileURI)
+	if !ok {
+		return "", fmt.Errorf("can't find document with uri: %s", fileURI)
+	}
+
+	// TODO use a different data structure than just a string so that this lookup isn't O(n)
+	currLine := 0
+	startIdx := 0
+	foundStart := false
+	endIdx := 0
+	foundEnd := false
+
+	if line == 0 {
+		startIdx = -1
+		foundStart = true
+	}
+
+	for currCharIdx := 0; currCharIdx < len(text.Text); currCharIdx++ {
+		currChar := text.Text[currCharIdx]
+		if currChar == '\n' {
+			currLine++
+
+			if currLine == line {
+				foundStart = true
+				startIdx = currCharIdx
+			} else if currLine == line+1 {
+				foundEnd = true
+				endIdx = currCharIdx
+				break
+			}
+		}
+	}
+	if !foundStart {
+		return "", fmt.Errorf("can't find line %d, document only has %d lines total", line, currLine)
+	}
+	if !foundEnd {
+		// it's the last line
+		endIdx = len(text.Text)
+	}
+
+	return text.Text[startIdx+1 : endIdx], nil
 }

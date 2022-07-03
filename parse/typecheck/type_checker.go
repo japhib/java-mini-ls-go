@@ -1,4 +1,4 @@
-package parse
+package typecheck
 
 import (
 	"fmt"
@@ -6,34 +6,36 @@ import (
 	"go.lsp.dev/protocol"
 	"golang.org/x/exp/slices"
 	"java-mini-ls-go/javaparser"
+	"java-mini-ls-go/parse"
 	"java-mini-ls-go/util"
 	"math"
 	"strings"
 )
 
 type TypeError struct {
-	Loc     Bounds
+	Loc     parse.Bounds
 	Message string
 }
 
 func (te *TypeError) ToDiagnostic() protocol.Diagnostic {
 	return protocol.Diagnostic{
-		Range:    BoundsToRange(te.Loc),
+		Range:    parse.BoundsToRange(te.Loc),
 		Severity: protocol.DiagnosticSeverityError,
 		Source:   "java-mini-ls",
 		Message:  te.Message,
 	}
 }
 
+//goland:noinspection GoNameStartsWithPackageName
 type TypeCheckResult struct {
 	TypeErrors      []TypeError
-	DefUsagesLookup DefinitionsUsagesLookup
+	DefUsagesLookup *DefinitionsUsagesLookup
 	RootScope       TypeCheckingScope
 }
 
 // CheckTypes traverses the given parse tree and performs type checking in all applicable
 // places. e.g. expressions, return statements, function calls, etc.
-func CheckTypes(tree antlr.Tree, fileURI string, userTypes TypeMap, builtins TypeMap) TypeCheckResult {
+func CheckTypes(tree antlr.Tree, fileURI string, userTypes parse.TypeMap, builtins parse.TypeMap) TypeCheckResult {
 	visitor := newTypeChecker(fileURI, userTypes, builtins)
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 
@@ -49,43 +51,9 @@ type typedDeclarationCtx interface {
 	VariableDeclarators() javaparser.IVariableDeclaratorsContext
 }
 
-type TypeCheckingScope struct {
-	Locals   map[string]SymbolWithDefUsages
-	Location Bounds
-	Parent   *TypeCheckingScope
-	Children []TypeCheckingScope
-}
-
-func newTypeCheckingScope(parent *TypeCheckingScope, bounds Bounds) TypeCheckingScope {
-	newScope := TypeCheckingScope{
-		Locals:   make(map[string]SymbolWithDefUsages),
-		Children: []TypeCheckingScope{},
-		Location: bounds,
-	}
-
-	if parent != nil {
-		newScope.Parent = parent
-		parent.Children = append(parent.Children, newScope)
-	}
-
-	return newScope
-}
-
-func (tcs *TypeCheckingScope) addLocal(name string, ttype *JavaType, bounds Bounds, fileURI string) {
-	tcs.Locals[name] = SymbolWithDefUsages{
-		SymbolName: name,
-		SymbolType: ttype,
-		Definition: CodeLocation{
-			FileUri: fileURI,
-			Loc:     bounds,
-		},
-		Usages: make([]CodeLocation, 0),
-	}
-}
-
 type typedExpression struct {
-	loc   Bounds
-	ttype *JavaType
+	loc   parse.Bounds
+	ttype *parse.JavaType
 }
 
 func (te typedExpression) String() string {
@@ -95,13 +63,13 @@ func (te typedExpression) String() string {
 type typeChecker struct {
 	javaparser.BaseJavaParserListener
 	currFileURI  string
-	userTypes    TypeMap
-	builtins     TypeMap
+	userTypes    parse.TypeMap
+	builtins     parse.TypeMap
 	errors       []TypeError
-	scopeTracker *ScopeTracker
+	scopeTracker *parse.ScopeTracker
 	rootScope    TypeCheckingScope
 	currentScope *TypeCheckingScope
-	defUsages    DefinitionsUsagesLookup
+	defUsages    *DefinitionsUsagesLookup
 
 	// A stack used to keep track of the types of various expressions.
 	// For example, in the binary expression `9 + 10`:
@@ -112,16 +80,16 @@ type typeChecker struct {
 	expressionStack util.Stack[typedExpression]
 }
 
-func newTypeChecker(fileURI string, userTypes TypeMap, builtins TypeMap) *typeChecker {
+func newTypeChecker(fileURI string, userTypes parse.TypeMap, builtins parse.TypeMap) *typeChecker {
 	rootScope := newTypeCheckingScope(
 		nil,
 		// Bounds representing the entire file
-		Bounds{
-			Start: FileLocation{
+		parse.Bounds{
+			Start: parse.FileLocation{
 				Line:   0,
 				Column: 0,
 			},
-			End: FileLocation{
+			End: parse.FileLocation{
 				Line:   math.MaxInt,
 				Column: math.MaxInt,
 			},
@@ -133,9 +101,10 @@ func newTypeChecker(fileURI string, userTypes TypeMap, builtins TypeMap) *typeCh
 		userTypes:       userTypes,
 		builtins:        builtins,
 		errors:          make([]TypeError, 0),
-		scopeTracker:    NewScopeTracker(),
+		scopeTracker:    parse.NewScopeTracker(),
 		rootScope:       rootScope,
 		currentScope:    &rootScope,
+		defUsages:       NewDefinitionsUsagesLookup(),
 		expressionStack: util.NewStack[typedExpression](),
 	}
 }
@@ -144,7 +113,7 @@ func (tc *typeChecker) addError(err TypeError) {
 	tc.errors = append(tc.errors, err)
 }
 
-func (tc *typeChecker) lookupType(typeName string) *JavaType {
+func (tc *typeChecker) lookupType(typeName string) *parse.JavaType {
 	userType, ok := tc.userTypes[typeName]
 	if ok {
 		return userType
@@ -155,24 +124,30 @@ func (tc *typeChecker) lookupType(typeName string) *JavaType {
 	}
 
 	// Type doesn't exist, create it
-	// TODO checks getting from builtins again unnecessarily
-	return getOrCreateBuiltinType(typeName)
+	fmt.Println("Creating built-in type: ", typeName)
+	jtype := &parse.JavaType{
+		Name:       typeName,
+		Visibility: parse.VisibilityPublic,
+	}
+	tc.builtins[typeName] = jtype
+
+	return jtype
 }
 
-func (tc *typeChecker) pushExprType(ttype *JavaType, bounds Bounds) {
+func (tc *typeChecker) pushExprType(ttype *parse.JavaType, bounds parse.Bounds) {
 	tc.expressionStack.Push(typedExpression{
 		loc:   bounds,
 		ttype: ttype,
 	})
 }
 
-func (tc *typeChecker) pushExprTypeName(typeName string, bounds Bounds) {
+func (tc *typeChecker) pushExprTypeName(typeName string, bounds parse.Bounds) {
 	tc.pushExprType(tc.lookupType(typeName), bounds)
 }
 
 // checkAndAddLocal adds a local variable, while first checking whether the local
 // is already defined, and if so, adding an error.
-func (tc *typeChecker) checkAndAddLocal(name string, ttype *JavaType, bounds Bounds, scopeType string) {
+func (tc *typeChecker) checkAndAddLocal(name string, ttype *parse.JavaType, bounds parse.Bounds, scopeType string) {
 	topScope := tc.currentScope
 	if _, ok := topScope.Locals[name]; ok {
 		currMethodName := tc.scopeTracker.ScopeStack.Top().Name
@@ -183,9 +158,18 @@ func (tc *typeChecker) checkAndAddLocal(name string, ttype *JavaType, bounds Bou
 	}
 
 	topScope.addLocal(name, ttype, bounds, tc.currFileURI)
+	tc.defUsages.Add(bounds, &SymbolWithDefUsages{
+		SymbolName: name,
+		SymbolType: ttype,
+		Definition: parse.CodeLocation{
+			FileUri: tc.currFileURI,
+			Loc:     bounds,
+		},
+		Usages: []parse.CodeLocation{},
+	})
 }
 
-func (tc *typeChecker) getEnclosingType() *JavaType {
+func (tc *typeChecker) getEnclosingType() *parse.JavaType {
 	scopes := tc.scopeTracker.ScopeStack
 	for i := scopes.Size() - 1; i >= 0; i-- {
 		scope := scopes.TopMinus(i)
@@ -199,7 +183,7 @@ func (tc *typeChecker) getEnclosingType() *JavaType {
 func (tc *typeChecker) EnterEveryRule(ctx antlr.ParserRuleContext) {
 	newScope := tc.scopeTracker.CheckEnterScope(ctx)
 	if newScope != nil {
-		bounds := ParserRuleContextToBounds(ctx)
+		bounds := parse.ParserRuleContextToBounds(ctx)
 
 		typeScope := newTypeCheckingScope(tc.currentScope, bounds)
 
@@ -237,22 +221,22 @@ func (tc *typeChecker) ExitBlockStatement(_ *javaparser.BlockStatementContext) {
 }
 
 func (tc *typeChecker) ExitFieldDeclaration(ctx *javaparser.FieldDeclarationContext) {
-	tc.handleTypedVariableDecl(ctx, ParserRuleContextToBounds(ctx), false)
+	tc.handleTypedVariableDecl(ctx, parse.ParserRuleContextToBounds(ctx), false)
 }
 
 func (tc *typeChecker) ExitLocalVariableDeclaration(ctx *javaparser.LocalVariableDeclarationContext) {
 	typedI := ctx.TypedLocalVarDecl()
 	if typedI != nil {
 		typed := typedI.(*javaparser.TypedLocalVarDeclContext)
-		tc.handleTypedVariableDecl(typed, ParserRuleContextToBounds(ctx), true)
+		tc.handleTypedVariableDecl(typed, parse.ParserRuleContextToBounds(ctx), true)
 	} else {
 		untyped := ctx.UntypedLocalVarDecl().(*javaparser.UntypedLocalVarDeclContext)
-		tc.handleUntypedLocalVariableDecl(untyped, ParserRuleContextToBounds(ctx))
+		tc.handleUntypedLocalVariableDecl(untyped)
 	}
 }
 
 // e.g. `String a = "hi"`
-func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx, bounds Bounds, isLocal bool) {
+func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx, bounds parse.Bounds, isLocal bool) {
 	ttype := tc.lookupType(ctx.TypeType().GetText())
 
 	// There can be multiple variable declarators
@@ -260,7 +244,8 @@ func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx, bounds B
 	for _, varDeclI := range varDecls {
 		varDecl := varDeclI.(*javaparser.VariableDeclaratorContext)
 
-		varName := varDecl.VariableDeclaratorId().(*javaparser.VariableDeclaratorIdContext).Identifier().GetText()
+		ident := varDecl.VariableDeclaratorId().(*javaparser.VariableDeclaratorIdContext).Identifier()
+		varName := ident.GetText()
 
 		var scopeType string
 		if isLocal {
@@ -270,7 +255,7 @@ func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx, bounds B
 		}
 
 		// TODO fix bounds, the error message also red underlines the equals sign
-		tc.checkAndAddLocal(varName, ttype, bounds, scopeType)
+		tc.checkAndAddLocal(varName, ttype, parse.ParserRuleContextToBounds(ident), scopeType)
 	}
 
 	// Make sure every value in the expression stack (which is the value of all the initializer expressions
@@ -287,11 +272,11 @@ func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx, bounds B
 }
 
 // e.g. `var a = "hi"`
-func (tc *typeChecker) handleUntypedLocalVariableDecl(ctx *javaparser.UntypedLocalVarDeclContext, bounds Bounds) {
+func (tc *typeChecker) handleUntypedLocalVariableDecl(ctx *javaparser.UntypedLocalVarDeclContext) {
 	// In order for type to be inferred, we must have already pushed the expression type
 	ttype := tc.expressionStack.Pop().ttype
 
-	tc.checkAndAddLocal(ctx.Identifier().GetText(), ttype, bounds, "method")
+	tc.checkAndAddLocal(ctx.Identifier().GetText(), ttype, parse.ParserRuleContextToBounds(ctx.Identifier()), "method")
 }
 
 func (tc *typeChecker) ExitPrimary(ctx *javaparser.PrimaryContext) {
@@ -307,7 +292,7 @@ func (tc *typeChecker) ExitPrimary(ctx *javaparser.PrimaryContext) {
 }
 
 func (tc *typeChecker) handleLiteral(ctx *javaparser.LiteralContext) {
-	bounds := ParserRuleContextToBounds(ctx)
+	bounds := parse.ParserRuleContextToBounds(ctx)
 
 	intLit := ctx.IntegerLiteral()
 	if intLit != nil {
@@ -370,7 +355,7 @@ func (tc *typeChecker) handleLiteral(ctx *javaparser.LiteralContext) {
 }
 
 func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
-	bounds := ParserRuleContextToBounds(ctx)
+	bounds := parse.ParserRuleContextToBounds(ctx)
 	identName := ctx.GetText()
 
 	// Is there a local by that name?
@@ -402,7 +387,7 @@ func (tc *typeChecker) ExitExpression(ctx *javaparser.ExpressionContext) {
 	bopToken := ctx.GetBop()
 	if bopToken != nil {
 		bop := bopToken.GetText()
-		tc.handleBinaryExpression(bop, ParserRuleContextToBounds(ctx))
+		tc.handleBinaryExpression(bop, parse.ParserRuleContextToBounds(ctx))
 	}
 }
 
@@ -414,7 +399,7 @@ var bitwiseBops = util.SetFromValues("&", "|", "^", "&=", "|=", "^=")
 var equalityBops = util.SetFromValues("==", "!=")
 var booleanBops = util.SetFromValues("&&", "||", "&&=", "||=")
 
-func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds Bounds) {
+func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds parse.Bounds) {
 	right := tc.expressionStack.Pop()
 	left := tc.expressionStack.Pop()
 
@@ -435,6 +420,10 @@ func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds Bounds) {
 	if left.ttype == nil {
 		exprNilFunc("left")
 		return
+	}
+
+	alwaysReturnsBoolean := func(_ *parse.JavaType, _ *parse.JavaType) *parse.JavaType {
+		return tc.lookupType("boolean")
 	}
 
 	opType := "unknown"
@@ -472,7 +461,7 @@ func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds Bounds) {
 		returnTypeFunc = alwaysReturnsBoolean
 	}
 
-	var returnType *JavaType
+	var returnType *parse.JavaType
 
 	if !definitelyNotAssignment && strings.Contains(bop, "=") {
 		// Assignment is sort of a special case.
@@ -489,7 +478,7 @@ func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds Bounds) {
 	})
 }
 
-func (tc *typeChecker) determineBopReturnType(left, right typedExpression, opType string, assertionFunc func(ttype *JavaType) bool, returnTypeFunc func(left *JavaType, right *JavaType) *JavaType) *JavaType {
+func (tc *typeChecker) determineBopReturnType(left, right typedExpression, opType string, assertionFunc func(ttype *parse.JavaType) bool, returnTypeFunc func(left *parse.JavaType, right *parse.JavaType) *parse.JavaType) *parse.JavaType {
 	// First check to make sure that both operands are valid types. If one is not, just return the other one.
 	assertionErrorFunc := func(expr typedExpression) {
 		tc.addError(TypeError{
@@ -512,21 +501,21 @@ func (tc *typeChecker) determineBopReturnType(left, right typedExpression, opTyp
 
 var numericTypes = util.SetFromValues("byte", "char", "short", "int", "long", "float", "double")
 
-func assertIsNumeric(ttype *JavaType) bool {
-	return ttype.Type == JavaTypePrimitive && numericTypes.Contains(ttype.Name)
+func assertIsNumeric(ttype *parse.JavaType) bool {
+	return ttype.Type == parse.JavaTypePrimitive && numericTypes.Contains(ttype.Name)
 }
 
 var integralTypes = util.SetFromValues("byte", "char", "short", "int", "long")
 
-func assertIsIntegral(ttype *JavaType) bool {
-	return ttype.Type == JavaTypePrimitive && integralTypes.Contains(ttype.Name)
+func assertIsIntegral(ttype *parse.JavaType) bool {
+	return ttype.Type == parse.JavaTypePrimitive && integralTypes.Contains(ttype.Name)
 }
 
-func assertIsBoolean(ttype *JavaType) bool {
-	return ttype.Type == JavaTypePrimitive && ttype.Name == "boolean"
+func assertIsBoolean(ttype *parse.JavaType) bool {
+	return ttype.Type == parse.JavaTypePrimitive && ttype.Name == "boolean"
 }
 
-func emptyTypeAssertion(_ *JavaType) bool {
+func emptyTypeAssertion(_ *parse.JavaType) bool {
 	return true
 }
 
@@ -537,7 +526,7 @@ var integralTypeWidths = []string{"byte", "short", "char", "int", "long"}
 
 // TODO this is for general arithmetic operators, it may be different for bitwise/bitshift ones
 // (e.g. right now this accepts Strings)
-func determineArithmeticBopReturnType(left *JavaType, right *JavaType) *JavaType {
+func determineArithmeticBopReturnType(left *parse.JavaType, right *parse.JavaType) *parse.JavaType {
 	// If either left or right is a String, it's a string concatenation
 	// so the return value is also a String
 	if left.Name == "String" {
@@ -567,7 +556,7 @@ func determineArithmeticBopReturnType(left *JavaType, right *JavaType) *JavaType
 	return widerOfIntegralTypes(left, right)
 }
 
-func widerOfIntegralTypes(left *JavaType, right *JavaType) *JavaType {
+func widerOfIntegralTypes(left *parse.JavaType, right *parse.JavaType) *parse.JavaType {
 	idxOfLeft := slices.Index(integralTypeWidths, left.Name)
 	idxOfRight := slices.Index(integralTypeWidths, right.Name)
 
@@ -576,8 +565,4 @@ func widerOfIntegralTypes(left *JavaType, right *JavaType) *JavaType {
 	} else {
 		return right
 	}
-}
-
-func alwaysReturnsBoolean(_ *JavaType, _ *JavaType) *JavaType {
-	return getOrCreateBuiltinType("boolean")
 }

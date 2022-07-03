@@ -1,11 +1,13 @@
-package parse
+package typecheck
+
+import "java-mini-ls-go/parse"
 
 // SymbolWithDefUsages keeps tracks of the definition and all the usages of a symbol.
 type SymbolWithDefUsages struct {
 	SymbolName string
-	SymbolType *JavaType
-	Definition CodeLocation
-	Usages     []CodeLocation
+	SymbolType *parse.JavaType
+	Definition parse.CodeLocation
+	Usages     []parse.CodeLocation
 }
 
 // DefinitionsUsagesWithLocation is a single definition or usage of a symbol.
@@ -14,7 +16,7 @@ type SymbolWithDefUsages struct {
 //
 // Note that it uses Bounds instead of CodeLocation since it only is for a single file.
 type DefinitionsUsagesWithLocation struct {
-	Loc       Bounds
+	Loc       parse.Bounds
 	DefUsages *SymbolWithDefUsages
 }
 
@@ -30,11 +32,17 @@ type DefinitionsUsagesLookup struct {
 	LookupTable map[int]DefinitionsUsagesOnLine
 }
 
+func NewDefinitionsUsagesLookup() *DefinitionsUsagesLookup {
+	return &DefinitionsUsagesLookup{
+		LookupTable: make(map[int]DefinitionsUsagesOnLine),
+	}
+}
+
 func (dul *DefinitionsUsagesLookup) GetLine(line int) DefinitionsUsagesOnLine {
 	return dul.LookupTable[line]
 }
 
-func (dul *DefinitionsUsagesLookup) Add(loc Bounds, defUsToAdd *SymbolWithDefUsages) {
+func (dul *DefinitionsUsagesLookup) Add(loc parse.Bounds, defUsToAdd *SymbolWithDefUsages) {
 	lineNumber := loc.Start.Line
 	line := dul.LookupTable[lineNumber]
 
@@ -65,7 +73,7 @@ func (dul *DefinitionsUsagesLookup) Add(loc Bounds, defUsToAdd *SymbolWithDefUsa
 
 // Lookup Given a file location, returns the most specific SymbolWithDefUsages instance corresponding
 // to that file location, if one exists.
-func (dul *DefinitionsUsagesLookup) Lookup(loc FileLocation) *SymbolWithDefUsages {
+func (dul *DefinitionsUsagesLookup) Lookup(loc parse.FileLocation) *SymbolWithDefUsages {
 	line := dul.LookupTable[loc.Line]
 	if line == nil {
 		return nil

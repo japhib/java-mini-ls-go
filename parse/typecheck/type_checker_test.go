@@ -1,24 +1,25 @@
-package parse
+package typecheck
 
 import (
 	"github.com/stretchr/testify/assert"
+	"java-mini-ls-go/parse"
 	"testing"
 )
 
 func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
 	// Make sure to load built-in types
-	_, err := LoadBuiltinTypes()
+	_, err := parse.LoadBuiltinTypes()
 	if err != nil {
 		t.Fatalf("Error loading builtin types: %s", err.Error())
 	}
 
-	tree, parseErrors := Parse(code)
+	tree, parseErrors := parse.Parse(code)
 	assert.Equal(t, 0, len(parseErrors))
 
-	strType := &JavaType{Name: "String"}
-	objType := &JavaType{Name: "Object"}
-	builtins := TypeMap{"String": strType, "Object": objType}
-	addPrimitiveTypes(builtins)
+	strType := &parse.JavaType{Name: "String"}
+	objType := &parse.JavaType{Name: "Object"}
+	builtins := parse.TypeMap{"String": strType, "Object": objType}
+	parse.AddPrimitiveTypes(builtins)
 	userTypes := GatherTypes(tree, builtins)
 
 	return CheckTypes(tree, "type_checker_test", userTypes, builtins)
@@ -123,12 +124,12 @@ public class MainClass {
 	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{
 		{
-			Loc: Bounds{
-				Start: FileLocation{
+			Loc: parse.Bounds{
+				Start: parse.FileLocation{
 					Line:   3,
 					Column: 16,
 				},
-				End: FileLocation{
+				End: parse.FileLocation{
 					Line:   3,
 					Column: 16,
 				},
@@ -148,12 +149,12 @@ public class MainClass {
 	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{
 		{
-			Loc: Bounds{
-				Start: FileLocation{
+			Loc: parse.Bounds{
+				Start: parse.FileLocation{
 					Line:   4,
 					Column: 22,
 				},
-				End: FileLocation{
+				End: parse.FileLocation{
 					Line:   4,
 					Column: 22,
 				},
@@ -174,12 +175,12 @@ public class MainClass {
 	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{
 		{
-			Loc: Bounds{
-				Start: FileLocation{
+			Loc: parse.Bounds{
+				Start: parse.FileLocation{
 					Line:   5,
 					Column: 2,
 				},
-				End: FileLocation{
+				End: parse.FileLocation{
 					Line:   5,
 					Column: 10,
 				},

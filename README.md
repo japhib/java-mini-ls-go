@@ -15,6 +15,7 @@ server? This has the potential to even further reduce memory usage and startup t
 
 - Document symbols
 - Syntax errors
+- Shows local variable type on hover
 
 ## Features planned for proof-of-concept
 
@@ -23,7 +24,8 @@ server? This has the potential to even further reduce memory usage and startup t
 - Go to definition (for user-defined stuff only)
 - Find references (for user-defined stuff only)
 - Automatically parse all files in project on startup
-- Hover support for built-in functions
+- Show docs on hover for stdlib classes/methods
+- Show signature on hover for user-defined classes/methods
 
 ## Limitations
 

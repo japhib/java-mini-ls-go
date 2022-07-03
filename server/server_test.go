@@ -181,3 +181,34 @@ func TestServer_Symbols(t *testing.T) {
 	}
 	assert.Equal(t, expected, symbolsConverted)
 }
+
+const shortTestFileText = `package java;
+
+import somepkg.Thing;
+import somepkg.nestedpkg.Nibble;`
+
+func TestServer_getTextOnLine(t *testing.T) {
+	ctx, cancel := testCtx()
+	defer cancel()
+	jls := testServer(t, ctx)
+
+	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: createTextDocument("test_location", shortTestFileText),
+	})
+	assert.Nil(t, err)
+
+	// First line
+	text, err := jls.getTextOnLine(string(uri.New("test_location")), 0)
+	assert.Nil(t, err)
+	assert.Equal(t, "package java;", text)
+
+	// Some line in the middle
+	text, err = jls.getTextOnLine(string(uri.New("test_location")), 2)
+	assert.Nil(t, err)
+	assert.Equal(t, "import somepkg.Thing;", text)
+
+	// Last line
+	text, err = jls.getTextOnLine(string(uri.New("test_location")), 3)
+	assert.Nil(t, err)
+	assert.Equal(t, "import somepkg.nestedpkg.Nibble;", text)
+}

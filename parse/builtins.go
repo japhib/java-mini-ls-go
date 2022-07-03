@@ -96,7 +96,7 @@ func loadBuiltinTypesFromDisk() error {
 	builtinTypes = make(TypeMap)
 
 	// add primitive types before we load the rest of the types
-	addPrimitiveTypes(builtinTypes)
+	AddPrimitiveTypes(builtinTypes)
 
 	err = loadJsonTypes(jsonTypes)
 	if err != nil {
@@ -160,7 +160,7 @@ func getStdlibJsonPath() (string, error) {
 	return absPath, nil
 }
 
-func addPrimitiveTypes(typeMap TypeMap) {
+func AddPrimitiveTypes(typeMap TypeMap) {
 	primitives := []string{
 		"byte",
 		"short",
