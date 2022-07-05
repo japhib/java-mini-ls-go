@@ -43,6 +43,9 @@ type JavaSymbol interface {
 
 	// GetUsages returns a list of all usages of this symbol.
 	GetUsages() []loc.CodeLocation
+
+	// AddUsage adds a usage of this symbol in the given location.
+	AddUsage(loc.CodeLocation)
 }
 
 type VisibilityType int
@@ -167,6 +170,10 @@ func (jt *JavaType) GetDefinition() *loc.CodeLocation {
 
 func (jt *JavaType) GetUsages() []loc.CodeLocation {
 	return jt.Usages
+}
+
+func (jt *JavaType) AddUsage(location loc.CodeLocation) {
+	jt.Usages = append(jt.Usages, location)
 }
 
 func (jt *JavaType) LookupField(name string) *JavaField {
@@ -337,6 +344,10 @@ func (jf *JavaField) GetUsages() []loc.CodeLocation {
 	return jf.Usages
 }
 
+func (jf *JavaField) AddUsage(location loc.CodeLocation) {
+	jf.Usages = append(jf.Usages, location)
+}
+
 func (jf *JavaField) String() string {
 	return fmt.Sprintf("%s %s%s %s", VisibilityTypeStrs[jf.Visibility], getStaticStr(jf.IsStatic), jf.ParentType.Name, jf.Name)
 }
@@ -382,6 +393,10 @@ func (jc *JavaConstructor) GetDefinition() *loc.CodeLocation {
 
 func (jc *JavaConstructor) GetUsages() []loc.CodeLocation {
 	return jc.Usages
+}
+
+func (jc *JavaConstructor) AddUsage(location loc.CodeLocation) {
+	jc.Usages = append(jc.Usages, location)
 }
 
 type JavaMethod struct {
@@ -439,6 +454,10 @@ func (jm *JavaMethod) GetDefinition() *loc.CodeLocation {
 
 func (jm *JavaMethod) GetUsages() []loc.CodeLocation {
 	return jm.Usages
+}
+
+func (jm *JavaMethod) AddUsage(location loc.CodeLocation) {
+	jm.Usages = append(jm.Usages, location)
 }
 
 func (jm *JavaMethod) String() string {
@@ -509,4 +528,8 @@ func (jl *JavaLocal) GetDefinition() *loc.CodeLocation {
 
 func (jl *JavaLocal) GetUsages() []loc.CodeLocation {
 	return jl.Usages
+}
+
+func (jl *JavaLocal) AddUsage(location loc.CodeLocation) {
+	jl.Usages = append(jl.Usages, location)
 }

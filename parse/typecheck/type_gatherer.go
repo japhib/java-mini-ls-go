@@ -183,7 +183,7 @@ func (tg *typeGatherer) addNewTypeFromScope(scope *parse.Scope, ttype typ.JavaTy
 		Loc:     scope.Bounds,
 	})
 	tg.types[scope.Name] = newType
-	tg.defUsages.AddNewSymbol(scope.Bounds, newType)
+	tg.defUsages.Add(loc.CodeLocation{FileUri: tg.currFileURI, Loc: scope.Bounds}, newType, false)
 }
 
 func (tg *typeGatherer) checkScopeExtendsImplements(scope *parse.Scope, ctx antlr.ParserRuleContext) {
@@ -270,7 +270,7 @@ func (tg *typeGatherer) addNewConstructorFromScope(ctx formalParametersCtx) {
 
 	currType.Constructors = append(currType.Constructors, newConstructor)
 
-	tg.defUsages.AddNewSymbol(bounds, newConstructor)
+	tg.defUsages.Add(loc.CodeLocation{FileUri: tg.currFileURI, Loc: bounds}, newConstructor, false)
 }
 
 func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx) {
@@ -304,7 +304,7 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx)
 
 	currType.Methods = append(currType.Methods, method)
 
-	tg.defUsages.AddNewSymbol(bounds, method)
+	tg.defUsages.Add(loc.CodeLocation{FileUri: tg.currFileURI, Loc: bounds}, method, false)
 }
 
 func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*typ.JavaParameter {

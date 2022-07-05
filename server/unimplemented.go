@@ -115,10 +115,6 @@ func (j *JavaLS) RangeFormatting(ctx context.Context, params *protocol.DocumentR
 	panic("RangeFormatting unimplemented")
 }
 
-func (j *JavaLS) References(ctx context.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
-	panic("References unimplemented")
-}
-
 func (j *JavaLS) Rename(ctx context.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, error) {
 	panic("Rename unimplemented")
 }

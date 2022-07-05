@@ -246,3 +246,50 @@ func TestServer_Hover(t *testing.T) {
 		Range: nil,
 	}, result)
 }
+
+const localTestFileText = `public class Main {
+    public void main() {
+		int a = 0;
+		return a;
+    }
+}`
+
+func TestServer_References(t *testing.T) {
+	ctx, cancel := testCtx()
+	defer cancel()
+	jls := testServer(t, ctx)
+
+	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: createTextDocument("test_location", localTestFileText),
+	})
+	assert.Nil(t, err)
+
+	result, err := jls.References(ctx, &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: uri.New("test_location"),
+			},
+			Position: protocol.Position{
+				Line:      2,
+				Character: 6,
+			},
+		},
+	})
+	assert.Nil(t, err)
+
+	assert.Equal(t, []protocol.Location{
+		{
+			URI: uri.New("test_location"),
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      3,
+					Character: 9,
+				},
+				End: protocol.Position{
+					Line:      3,
+					Character: 10,
+				},
+			},
+		},
+	}, result)
+}

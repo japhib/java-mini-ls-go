@@ -3,14 +3,13 @@ package server
 import (
 	"context"
 	"fmt"
+	"go.lsp.dev/uri"
 	"java-mini-ls-go/parse"
 	"java-mini-ls-go/parse/loc"
 	"java-mini-ls-go/parse/sym"
 	"java-mini-ls-go/parse/typ"
 	"java-mini-ls-go/parse/typecheck"
 	"java-mini-ls-go/util"
-
-	"github.com/pkg/errors"
 
 	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
@@ -88,6 +87,7 @@ func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams
 			},
 			DocumentSymbolProvider: true,
 			HoverProvider:          true,
+			ReferencesProvider:     true,
 		},
 		ServerInfo: nil,
 	}, nil
@@ -196,34 +196,32 @@ func (j *JavaLS) DocumentSymbol(_ context.Context, params *protocol.DocumentSymb
 }
 
 func (j *JavaLS) Hover(ctx context.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
-	textOnLine, err := j.getTextOnLine(string(params.TextDocument.URI), int(params.Position.Line))
-	if textOnLine == "" {
-		return nil, errors.Wrapf(err, "can't get document text on line %d", int(params.Position.Line))
-	}
-
-	// Check if it's a local
 	lookup, ok := j.defUsages.Get(string(params.TextDocument.URI))
-	if ok {
-		symbol := lookup.Lookup(loc.FileLocation{
-			Line:   int(params.Position.Line) + 1,
-			Column: int(params.Position.Character),
-		})
-		if symbol != nil {
-			// For now just return the variable name + type
-			return &protocol.Hover{
-				Contents: protocol.MarkupContent{
-					Kind:  protocol.Markdown,
-					Value: fmt.Sprintf("**%s** %s", symbol.ShortName(), symbol.FullName()),
-				},
-				Range: nil,
-			}, nil
-		}
+	if !ok {
+		return nil, nil
 	}
 
-	return nil, nil
+	symbol := lookup.Lookup(loc.FileLocation{
+		// Note: the +1 is convert from 0-based line numbers (LSP) to 1-based line numbers (this project)
+		Line:   int(params.Position.Line) + 1,
+		Column: int(params.Position.Character),
+	})
+	if symbol == nil {
+		return nil, nil
+	}
+
+	// For now just return the variable name + type
+	return &protocol.Hover{
+		Contents: protocol.MarkupContent{
+			Kind:  protocol.Markdown,
+			Value: fmt.Sprintf("**%s** %s", symbol.ShortName(), symbol.FullName()),
+		},
+		Range: nil,
+	}, nil
 }
 
 // NOTE: line is 0-based here (LSP style)
+// This is unused, can we delete it?
 func (j *JavaLS) getTextOnLine(fileURI string, line int) (string, error) {
 	text, ok := j.documentTextCache.Get(fileURI)
 	if !ok {
@@ -266,4 +264,29 @@ func (j *JavaLS) getTextOnLine(fileURI string, line int) (string, error) {
 	}
 
 	return text.Text[startIdx+1 : endIdx], nil
+}
+
+func (j *JavaLS) References(_ context.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
+	lookup, ok := j.defUsages.Get(string(params.TextDocument.URI))
+	if !ok {
+		return nil, nil
+	}
+
+	symbol := lookup.Lookup(loc.FileLocation{
+		// Note: the +1 is convert from 0-based line numbers (LSP) to 1-based line numbers (this project)
+		Line:   int(params.Position.Line) + 1,
+		Column: int(params.Position.Character),
+	})
+	if symbol == nil {
+		return nil, nil
+	}
+
+	return util.Map(symbol.GetUsages(), codeLocationToLSPLocation), nil
+}
+
+func codeLocationToLSPLocation(loca loc.CodeLocation) protocol.Location {
+	return protocol.Location{
+		URI:   uri.New(loca.FileUri),
+		Range: loc.BoundsToRange(loca.Loc),
+	}
 }

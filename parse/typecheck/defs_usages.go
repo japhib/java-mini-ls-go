@@ -37,8 +37,12 @@ func (dul *DefinitionsUsagesLookup) GetLine(line int) SymbolsOnLine {
 	return dul.DefUsagesByLine[line]
 }
 
-func (dul *DefinitionsUsagesLookup) AddNewSymbol(loc loc.Bounds, symbolToAdd typ.JavaSymbol) {
-	lineNumber := loc.Start.Line
+func (dul *DefinitionsUsagesLookup) Add(location loc.CodeLocation, symbol typ.JavaSymbol, addUsage bool) {
+	if addUsage {
+		symbol.AddUsage(location)
+	}
+
+	lineNumber := location.Loc.Start.Line
 	line := dul.DefUsagesByLine[lineNumber]
 
 	// If a list for that line doesn't exist, create it now
@@ -49,7 +53,7 @@ func (dul *DefinitionsUsagesLookup) AddNewSymbol(loc loc.Bounds, symbolToAdd typ
 
 	// Also make sure there's not already an item with that name/bounds
 	for _, defUsages := range line {
-		if defUsages.Symbol.GetDefinition() == symbolToAdd.GetDefinition() && defUsages.Loc.Equals(loc) {
+		if defUsages.Symbol.GetDefinition() == symbol.GetDefinition() && defUsages.Loc.Equals(location.Loc) {
 			// Name/location match
 			// TODO merge usages
 			return
@@ -58,8 +62,8 @@ func (dul *DefinitionsUsagesLookup) AddNewSymbol(loc loc.Bounds, symbolToAdd typ
 
 	// If we've made it this far, it hasn't been found so we can add it
 	line = append(line, SymbolWithLocation{
-		Symbol: symbolToAdd,
-		Loc:    loc,
+		Symbol: symbol,
+		Loc:    location.Loc,
 	})
 
 	// Make sure to assign it back in case append had to realloc
