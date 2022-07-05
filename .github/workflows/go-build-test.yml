@@ -12,7 +12,7 @@ permissions:
   pull-requests: read
 jobs:
   go-build-test:
-    name: test
+    name: go-build-test
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -24,9 +24,6 @@ jobs:
 
       - name: Go Build
         run: go build -v ./...
-
-      - name: Set Env Var
-        run: export JAVA_MINI_LS_STDLIB_PATH=$(pwd)
 
       - name: Go Test
         run: go test -v ./...

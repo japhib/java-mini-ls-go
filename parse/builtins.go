@@ -7,6 +7,8 @@ import (
 	"java-mini-ls-go/util"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -143,18 +145,14 @@ func readJsonFromDisk() ([]javaJsonType, error) {
 }
 
 func getStdlibJsonPath() (string, error) {
-	envPath := os.Getenv("JAVA_MINI_LS_STDLIB_PATH")
-	if envPath != "" {
-		return envPath, nil
+	// Determine filename from caller location
+	_, filename, _, _ := runtime.Caller(0)
+	idx := strings.LastIndex(filename, "java-mini-ls-go")
+	if idx != -1 {
+		filename = filename[0:idx+len("java-mini-ls-go")] + "/"
 	}
 
-	// Env var not set, look up from executable location
-	execPath, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-
-	absPath, err := filepath.Abs(filepath.Dir(execPath))
+	absPath, err := filepath.Abs(filepath.Dir(filename))
 	if err != nil {
 		return "", err
 	}
