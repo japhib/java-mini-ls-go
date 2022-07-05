@@ -23,9 +23,8 @@ func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
 	objType := &typ.JavaType{Name: "Object"}
 	builtins := typ.TypeMap{"String": strType, "Object": objType}
 	typ.AddPrimitiveTypes(builtins)
-	userTypes := GatherTypes("testfile", tree, builtins)
 
-	return CheckTypes(zaptest.NewLogger(t), tree, "type_checker_test", userTypes, builtins)
+	return CheckTypes(zaptest.NewLogger(t), tree, "type_checker_test", builtins)
 }
 
 func TestCheckTypes_Addition(t *testing.T) {
@@ -134,7 +133,7 @@ public class MainClass {
 				},
 				End: loc.FileLocation{
 					Line:   3,
-					Column: 16,
+					Column: 20,
 				},
 			},
 			Message: "Type mismatch: cannot convert from String to int",
@@ -159,7 +158,7 @@ public class MainClass {
 				},
 				End: loc.FileLocation{
 					Line:   4,
-					Column: 22,
+					Column: 23,
 				},
 			},
 			Message: "Type mismatch: cannot convert from int to String",
@@ -185,7 +184,7 @@ public class MainClass {
 				},
 				End: loc.FileLocation{
 					Line:   5,
-					Column: 6,
+					Column: 7,
 				},
 			},
 			Message: "Variable a is already defined in method add",

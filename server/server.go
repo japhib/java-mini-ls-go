@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"java-mini-ls-go/parse"
 	"java-mini-ls-go/parse/loc"
-	"java-mini-ls-go/parse/symbol"
+	"java-mini-ls-go/parse/sym"
 	"java-mini-ls-go/parse/typ"
 	"java-mini-ls-go/parse/typecheck"
 	"java-mini-ls-go/util"
@@ -26,7 +26,7 @@ type JavaLS struct {
 	client protocol.Client
 
 	documentTextCache *util.SyncMap[string, protocol.TextDocumentItem]
-	symbols           *util.SyncMap[string, []*symbol.CodeSymbol]
+	symbols           *util.SyncMap[string, []*sym.CodeSymbol]
 	scopes            *util.SyncMap[string, typecheck.TypeCheckingScope]
 	defUsages         *util.SyncMap[string, *typecheck.DefinitionsUsagesLookup]
 	builtinTypes      map[string]*typ.JavaType
@@ -44,7 +44,7 @@ func NewServer(ctx context.Context, logger *zap.Logger) *JavaLS {
 		log:                  logger,
 		client:               nil,
 		documentTextCache:    util.NewSyncMap[string, protocol.TextDocumentItem](),
-		symbols:              util.NewSyncMap[string, []*symbol.CodeSymbol](),
+		symbols:              util.NewSyncMap[string, []*sym.CodeSymbol](),
 		scopes:               util.NewSyncMap[string, typecheck.TypeCheckingScope](),
 		defUsages:            util.NewSyncMap[string, *typecheck.DefinitionsUsagesLookup](),
 		builtinTypes:         make(map[string]*typ.JavaType),
@@ -130,11 +130,10 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 
 	parsed, syntaxErrors := parse.Parse(textDocument.Text)
 
-	symbols := symbol.FindSymbols(parsed)
+	symbols := sym.FindSymbols(parsed)
 	j.symbols.Set(uriString, symbols)
 
-	userTypes := typecheck.GatherTypes(uriString, parsed, j.builtinTypes)
-	typeCheckingResult := typecheck.CheckTypes(j.log, parsed, uriString, userTypes, j.builtinTypes)
+	typeCheckingResult := typecheck.CheckTypes(j.log, parsed, uriString, j.builtinTypes)
 	j.scopes.Set(uriString, typeCheckingResult.RootScope)
 	j.defUsages.Set(uriString, typeCheckingResult.DefUsagesLookup)
 
@@ -147,19 +146,19 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	j.diagnosticsPublisher.PublishDiagnostics(j, textDocument, diagnostics)
 }
 
-var symbolTypeMap = map[symbol.CodeSymbolType]protocol.SymbolKind{
-	symbol.CodeSymbolClass:       protocol.SymbolKindClass,
-	symbol.CodeSymbolConstant:    protocol.SymbolKindConstant,
-	symbol.CodeSymbolConstructor: protocol.SymbolKindConstructor,
-	symbol.CodeSymbolEnum:        protocol.SymbolKindEnum,
-	symbol.CodeSymbolEnumMember:  protocol.SymbolKindEnumMember,
-	symbol.CodeSymbolInterface:   protocol.SymbolKindInterface,
-	symbol.CodeSymbolMethod:      protocol.SymbolKindMethod,
-	symbol.CodeSymbolPackage:     protocol.SymbolKindPackage,
-	symbol.CodeSymbolVariable:    protocol.SymbolKindVariable,
+var symbolTypeMap = map[sym.CodeSymbolType]protocol.SymbolKind{
+	sym.CodeSymbolClass:       protocol.SymbolKindClass,
+	sym.CodeSymbolConstant:    protocol.SymbolKindConstant,
+	sym.CodeSymbolConstructor: protocol.SymbolKindConstructor,
+	sym.CodeSymbolEnum:        protocol.SymbolKindEnum,
+	sym.CodeSymbolEnumMember:  protocol.SymbolKindEnumMember,
+	sym.CodeSymbolInterface:   protocol.SymbolKindInterface,
+	sym.CodeSymbolMethod:      protocol.SymbolKindMethod,
+	sym.CodeSymbolPackage:     protocol.SymbolKindPackage,
+	sym.CodeSymbolVariable:    protocol.SymbolKindVariable,
 }
 
-func convertToDocumentSymbols(codeSymbols []*symbol.CodeSymbol) []protocol.DocumentSymbol {
+func convertToDocumentSymbols(codeSymbols []*sym.CodeSymbol) []protocol.DocumentSymbol {
 	ret := make([]protocol.DocumentSymbol, 0, len(codeSymbols))
 
 	for _, s := range codeSymbols {

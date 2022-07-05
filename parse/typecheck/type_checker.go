@@ -42,10 +42,17 @@ type TypeCheckResult struct {
 	RootScope       TypeCheckingScope
 }
 
-// CheckTypes traverses the given parse tree and performs type checking in all applicable
+// CheckTypes is the entrypoint for all type-related analysis. First calls GatherTypes and then checkTypes,
+// helpfully stringing the return values of the one into the ones that are necessary for the other.
+func CheckTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, builtins typ.TypeMap) TypeCheckResult {
+	types, defUsages := GatherTypes(fileURI, tree, builtins)
+	return checkTypes(logger, tree, fileURI, types, builtins, defUsages)
+}
+
+// checkTypes traverses the given parse tree and performs type checking in all applicable
 // places. e.g. expressions, return statements, function calls, etc.
-func CheckTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, userTypes typ.TypeMap, builtins typ.TypeMap) TypeCheckResult {
-	visitor := newTypeChecker(logger, fileURI, userTypes, builtins)
+func checkTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, userTypes typ.TypeMap, builtins typ.TypeMap, defUsages *DefinitionsUsagesLookup) TypeCheckResult {
+	visitor := newTypeChecker(logger, fileURI, userTypes, builtins, defUsages)
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 
 	return TypeCheckResult{
@@ -90,7 +97,7 @@ type typeChecker struct {
 	expressionStack util.Stack[typedExpression]
 }
 
-func newTypeChecker(logger *zap.Logger, fileURI string, userTypes typ.TypeMap, builtins typ.TypeMap) *typeChecker {
+func newTypeChecker(logger *zap.Logger, fileURI string, userTypes typ.TypeMap, builtins typ.TypeMap, defUsages *DefinitionsUsagesLookup) *typeChecker {
 	rootScope := newTypeCheckingScope(
 		nil,
 		nil,
@@ -117,7 +124,7 @@ func newTypeChecker(logger *zap.Logger, fileURI string, userTypes typ.TypeMap, b
 		scopeTracker:           parse.NewScopeTracker(),
 		rootScope:              rootScope,
 		currentScope:           &rootScope,
-		defUsages:              NewDefinitionsUsagesLookup(),
+		defUsages:              defUsages,
 		expressionStack:        util.NewStack[typedExpression](),
 	}
 }
@@ -138,7 +145,7 @@ func (tc *typeChecker) lookupType(typeName string) *typ.JavaType {
 
 	// Type doesn't exist, create it
 	fmt.Println("Creating built-in type: ", typeName)
-	jtype := typ.NewJavaType(typeName, "", typ.VisibilityPublic, typ.JavaTypeClass)
+	jtype := typ.NewJavaType(typeName, "", typ.VisibilityPublic, typ.JavaTypeClass, nil)
 	tc.builtins[typeName] = jtype
 
 	return jtype

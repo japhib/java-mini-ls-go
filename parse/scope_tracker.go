@@ -130,7 +130,7 @@ func (st *ScopeTracker) createScope(parent *Scope, ctx antlr.ParserRuleContext) 
 	ret := &Scope{
 		Name:     "",
 		Type:     ScopeTypeUnset,
-		Bounds:   loc.ParserRuleContextToBounds(ctx),
+		Bounds:   loc.Bounds{},
 		Parent:   parent,
 		Children: make([]*Scope, 0),
 	}
@@ -138,40 +138,53 @@ func (st *ScopeTracker) createScope(parent *Scope, ctx antlr.ParserRuleContext) 
 	switch ctx.GetRuleIndex() {
 	case javaparser.JavaParserRULE_classDeclaration:
 		ret.Type = ScopeTypeClass
-		ret.Name = ctx.(*javaparser.ClassDeclarationContext).Identifier().GetText()
+		subCtx := ctx.(*javaparser.ClassDeclarationContext).Identifier()
+		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	case javaparser.JavaParserRULE_methodDeclaration:
 		ret.Type = ScopeTypeMethod
-		ret.Name = ctx.(*javaparser.MethodDeclarationContext).Identifier().GetText()
+		subCtx := ctx.(*javaparser.MethodDeclarationContext).Identifier()
+		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	case javaparser.JavaParserRULE_genericMethodDeclaration:
 		ret.Type = ScopeTypeGenericMethod
-		ret.Name = ctx.(*javaparser.GenericMethodDeclarationContext).MethodDeclaration().(*javaparser.MethodDeclarationContext).Identifier().GetText()
+		subCtx := ctx.(*javaparser.GenericMethodDeclarationContext).MethodDeclaration().(*javaparser.MethodDeclarationContext).Identifier()
+		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	case javaparser.JavaParserRULE_interfaceMethodDeclaration:
 		ret.Type = ScopeTypeInterfaceMethod
-		body := ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext)
-		ret.Name = body.Identifier().GetText()
+		subCtx := ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext).Identifier()
+		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	case javaparser.JavaParserRULE_genericInterfaceMethodDeclaration:
 		ret.Type = ScopeTypeGenericInterfaceMethod
-		body := ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext)
-		ret.Name = body.Identifier().GetText()
+		subCtx := ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext).Identifier()
+		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	case javaparser.JavaParserRULE_constructorDeclaration:
 		ret.Type = ScopeTypeConstructor
-		ret.Name = ctx.(*javaparser.ConstructorDeclarationContext).Identifier().GetText()
+		subCtx := ctx.(*javaparser.ConstructorDeclarationContext).Identifier()
+		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	case javaparser.JavaParserRULE_genericConstructorDeclaration:
 		ret.Type = ScopeTypeGenericConstructor
-		ret.Name = ctx.(*javaparser.GenericConstructorDeclarationContext).ConstructorDeclaration().(*javaparser.ConstructorDeclarationContext).Identifier().GetText()
+		subCtx := ctx.(*javaparser.GenericConstructorDeclarationContext).ConstructorDeclaration().(*javaparser.ConstructorDeclarationContext).Identifier()
+		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	case javaparser.JavaParserRULE_interfaceDeclaration:
 		ret.Type = ScopeTypeInterface
-		ret.Name = ctx.(*javaparser.InterfaceDeclarationContext).Identifier().GetText()
+		subCtx := ctx.(*javaparser.InterfaceDeclarationContext).Identifier()
+		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	case javaparser.JavaParserRULE_enumDeclaration:
 		ret.Type = ScopeTypeEnum
-		ret.Name = ctx.(*javaparser.EnumDeclarationContext).Identifier().GetText()
+		subCtx := ctx.(*javaparser.EnumDeclarationContext).Identifier()
+		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	case javaparser.JavaParserRULE_annotationTypeDeclaration:
 		ret.Type = ScopeTypeAnnotationType
-		ret.Name = ctx.(*javaparser.AnnotationTypeDeclarationContext).Identifier().GetText()
+		subCtx := ctx.(*javaparser.AnnotationTypeDeclarationContext).Identifier()
+		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	case javaparser.JavaParserRULE_recordDeclaration:
 		ret.Type = ScopeTypeRecord
-		ret.Name = ctx.(*javaparser.RecordDeclarationContext).Identifier().GetText()
+		subCtx := ctx.(*javaparser.RecordDeclarationContext).Identifier()
+		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	}
 
 	return ret
+}
+
+func nameAndBoundsForCtx(ident javaparser.IIdentifierContext) (string, loc.Bounds) {
+	return ident.GetText(), loc.ParserRuleContextToBounds(ident)
 }

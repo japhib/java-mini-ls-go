@@ -73,7 +73,7 @@ public class Main {
 		"String": strType,
 	}
 
-	types := GatherTypes("testfile", tree, builtins)
+	types, _ := GatherTypes("testfile", tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
 
 	expectedTypes := typ.TypeMap{
@@ -142,7 +142,7 @@ class MyClass {
 		"int":    intType,
 	}
 
-	types := GatherTypes("testfile", tree, builtins)
+	types, _ := GatherTypes("testfile", tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
 
 	nestedType := &typ.JavaType{
@@ -241,7 +241,7 @@ enum MyEnum {
 
 	strType := &typ.JavaType{Name: "String"}
 	builtins := typ.TypeMap{"String": strType}
-	types := GatherTypes("testfile", tree, builtins)
+	types, _ := GatherTypes("testfile", tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
 
 	expectedTypes := typ.TypeMap{

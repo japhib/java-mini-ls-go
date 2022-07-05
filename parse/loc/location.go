@@ -31,7 +31,7 @@ func ParserRuleContextToBounds(ctx antlr.ParserRuleContext) Bounds {
 
 	return Bounds{
 		Start: FileLocation{startToken.GetLine(), startToken.GetColumn()},
-		End:   FileLocation{stopToken.GetLine(), stopToken.GetColumn()},
+		End:   FileLocation{stopToken.GetLine(), stopToken.GetColumn() + len(stopToken.GetText())},
 	}
 }
 

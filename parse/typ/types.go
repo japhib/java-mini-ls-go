@@ -113,7 +113,7 @@ type JavaType struct {
 	Type       JavaTypeType
 }
 
-func NewJavaType(name string, ppackage string, visibility VisibilityType, ttype JavaTypeType) *JavaType {
+func NewJavaType(name string, ppackage string, visibility VisibilityType, ttype JavaTypeType, definition *loc.CodeLocation) *JavaType {
 	return &JavaType{
 		Name:         name,
 		Package:      ppackage,
@@ -123,7 +123,7 @@ func NewJavaType(name string, ppackage string, visibility VisibilityType, ttype 
 		Constructors: make([]*JavaConstructor, 0),
 		Fields:       make([]*JavaField, 0),
 		Methods:      make([]*JavaMethod, 0),
-		Definition:   nil,
+		Definition:   definition,
 		Usages:       make([]loc.CodeLocation, 0),
 		Visibility:   visibility,
 		Type:         ttype,
@@ -131,7 +131,7 @@ func NewJavaType(name string, ppackage string, visibility VisibilityType, ttype 
 }
 
 func NewPrimitiveType(name string) *JavaType {
-	return NewJavaType(name, "", VisibilityPublic, JavaTypePrimitive)
+	return NewJavaType(name, "", VisibilityPublic, JavaTypePrimitive, nil)
 }
 
 // Compile-time check that JavaType implements JavaSymbol interface
@@ -150,7 +150,11 @@ func (jt *JavaType) ShortName() string {
 }
 
 func (jt *JavaType) FullName() string {
-	return fmt.Sprintf("%s.%s", jt.Package, jt.Name)
+	if jt.Package != "" {
+		return fmt.Sprintf("%s.%s", jt.Package, jt.Name)
+	} else {
+		return jt.Name
+	}
 }
 
 func (jt *JavaType) GetVisibility() VisibilityType {
@@ -481,7 +485,7 @@ func (jl *JavaLocal) ShortName() string {
 }
 
 func (jl *JavaLocal) FullName() string {
-	return fmt.Sprintf("%s:%s:%s", jl.ParentMethod.FullName(), jl.Type.FullName(), jl.Name)
+	return fmt.Sprintf("%s %s (in %s)", jl.Type.FullName(), jl.Name, jl.ParentMethod.FullName())
 }
 
 func (jl *JavaLocal) GetVisibility() VisibilityType {

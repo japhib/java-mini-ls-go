@@ -226,7 +226,7 @@ func convertJsonMethod(parentType *JavaType, jsonMethod javaJsonMethod) *JavaMet
 func loadJsonTypes(jsonTypes []javaJsonType) error {
 	// First, get just the bare types defined
 	for _, jsonType := range jsonTypes {
-		newType := NewJavaType(jsonType.Name, jsonType.Package, VisibilityPublic, convertJsonTypeType(jsonType.Type))
+		newType := NewJavaType(jsonType.Name, jsonType.Package, VisibilityPublic, convertJsonTypeType(jsonType.Type), nil)
 		builtinTypes[jsonType.Name] = newType
 	}
 
@@ -286,7 +286,7 @@ func getOrCreateBuiltinType(name string) *JavaType {
 	jtype, ok := builtinTypes[name]
 	if !ok {
 		//fmt.Println("Creating built-in type: ", name)
-		jtype = NewJavaType(name, "", VisibilityPublic, JavaTypeClass)
+		jtype = NewJavaType(name, "", VisibilityPublic, JavaTypeClass, nil)
 		builtinTypes[name] = jtype
 	}
 

@@ -12,7 +12,7 @@ import (
 
 // GatherTypes traverses the given parse tree and gathers all class, method, field, etc. declarations.
 // TODO doesn't get visibility of any types.
-func GatherTypes(fileURI string, tree antlr.Tree, builtins typ.TypeMap) typ.TypeMap {
+func GatherTypes(fileURI string, tree antlr.Tree, builtins typ.TypeMap) (typ.TypeMap, *DefinitionsUsagesLookup) {
 	visitor := newTypeGatherer(fileURI, builtins)
 
 	// First pass: just get types (no fields/methods yet, since those will reference the types)
@@ -22,7 +22,7 @@ func GatherTypes(fileURI string, tree antlr.Tree, builtins typ.TypeMap) typ.Type
 	visitor.setSecondPass()
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 
-	return visitor.types
+	return visitor.types, visitor.defUsages
 }
 
 type formalParametersCtx interface {
@@ -177,7 +177,10 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 }
 
 func (tg *typeGatherer) addNewTypeFromScope(scope *parse.Scope, ttype typ.JavaTypeType) {
-	newType := typ.NewJavaType(scope.Name, tg.currPackageName, typ.VisibilityPublic, ttype)
+	newType := typ.NewJavaType(scope.Name, tg.currPackageName, typ.VisibilityPublic, ttype, &loc.CodeLocation{
+		FileUri: tg.currFileURI,
+		Loc:     scope.Bounds,
+	})
 	tg.types[scope.Name] = newType
 	tg.defUsages.NewSymbol(scope.Bounds, newType)
 }

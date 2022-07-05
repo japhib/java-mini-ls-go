@@ -1,4 +1,4 @@
-package symbol
+package sym
 
 import (
 	"fmt"
