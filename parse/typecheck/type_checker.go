@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 	"go.lsp.dev/protocol"
+	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 	"java-mini-ls-go/javaparser"
 	"java-mini-ls-go/parse"
@@ -35,8 +36,8 @@ type TypeCheckResult struct {
 
 // CheckTypes traverses the given parse tree and performs type checking in all applicable
 // places. e.g. expressions, return statements, function calls, etc.
-func CheckTypes(tree antlr.Tree, fileURI string, userTypes parse.TypeMap, builtins parse.TypeMap) TypeCheckResult {
-	visitor := newTypeChecker(fileURI, userTypes, builtins)
+func CheckTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, userTypes parse.TypeMap, builtins parse.TypeMap) TypeCheckResult {
+	visitor := newTypeChecker(logger, fileURI, userTypes, builtins)
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 
 	return TypeCheckResult{
@@ -62,6 +63,7 @@ func (te typedExpression) String() string {
 
 type typeChecker struct {
 	javaparser.BaseJavaParserListener
+	logger       *zap.Logger
 	currFileURI  string
 	userTypes    parse.TypeMap
 	builtins     parse.TypeMap
@@ -80,8 +82,9 @@ type typeChecker struct {
 	expressionStack util.Stack[typedExpression]
 }
 
-func newTypeChecker(fileURI string, userTypes parse.TypeMap, builtins parse.TypeMap) *typeChecker {
+func newTypeChecker(logger *zap.Logger, fileURI string, userTypes parse.TypeMap, builtins parse.TypeMap) *typeChecker {
 	rootScope := newTypeCheckingScope(
+		nil,
 		nil,
 		// Bounds representing the entire file
 		parse.Bounds{
@@ -97,6 +100,7 @@ func newTypeChecker(fileURI string, userTypes parse.TypeMap, builtins parse.Type
 	)
 
 	return &typeChecker{
+		logger:          logger.Named("typeChecker"),
 		currFileURI:     fileURI,
 		userTypes:       userTypes,
 		builtins:        builtins,
@@ -145,9 +149,9 @@ func (tc *typeChecker) pushExprTypeName(typeName string, bounds parse.Bounds) {
 	tc.pushExprType(tc.lookupType(typeName), bounds)
 }
 
-// checkAndAddLocal adds a local variable, while first checking whether the local
+// checkAndAddVariable adds a local variable, while first checking whether the local
 // is already defined, and if so, adding an error.
-func (tc *typeChecker) checkAndAddLocal(name string, ttype *parse.JavaType, bounds parse.Bounds, scopeType string) {
+func (tc *typeChecker) checkAndAddVariable(name string, ttype *parse.JavaType, bounds parse.Bounds, scopeType string) {
 	topScope := tc.currentScope
 	if _, ok := topScope.Locals[name]; ok {
 		currMethodName := tc.scopeTracker.ScopeStack.Top().Name
@@ -157,16 +161,16 @@ func (tc *typeChecker) checkAndAddLocal(name string, ttype *parse.JavaType, boun
 		})
 	}
 
-	topScope.addLocal(name, ttype, bounds, tc.currFileURI)
-	tc.defUsages.NewSymbol(bounds, &SymbolWithDefUsages{
-		SymbolName: name,
-		SymbolType: ttype,
-		Definition: parse.CodeLocation{
+	enclosingMethod, ok := topScope.Symbol.(*parse.JavaMethod)
+	if ok {
+		// We're inside a method, so it's a local
+		local := parse.NewJavaLocal(name, ttype, enclosingMethod, parse.CodeLocation{
 			FileUri: tc.currFileURI,
 			Loc:     bounds,
-		},
-		Usages: []parse.CodeLocation{},
-	})
+		})
+		topScope.addLocal(local)
+		tc.defUsages.NewSymbol(bounds, local)
+	}
 }
 
 func (tc *typeChecker) getEnclosingType() *parse.JavaType {
@@ -184,23 +188,52 @@ func (tc *typeChecker) EnterEveryRule(ctx antlr.ParserRuleContext) {
 	newScope := tc.scopeTracker.CheckEnterScope(ctx)
 	if newScope != nil {
 		bounds := parse.ParserRuleContextToBounds(ctx)
-
-		typeScope := newTypeCheckingScope(tc.currentScope, bounds)
+		symbolForScope := tc.getSymbolFromScope(newScope)
+		typeScope := newTypeCheckingScope(symbolForScope, tc.currentScope, bounds)
 
 		if newScope.Type.IsMethodType() {
 			// Add method params to Locals.
 			// First, look up method in types.
 			enclosingType := tc.getEnclosingType()
+
 			// TODO handle method overrides (same name)
-			method := enclosingType.Methods[newScope.Name]
+			methodIdx := slices.IndexFunc(enclosingType.Methods, func(method *parse.JavaMethod) bool {
+				return method.Name == newScope.Name
+			})
+			method := enclosingType.Methods[methodIdx]
 
 			for _, param := range method.Params {
-				typeScope.addLocal(param.Name, param.Type, bounds, tc.currFileURI)
+				local := parse.NewJavaLocal(param.Name, param.Type, method, parse.CodeLocation{
+					FileUri: tc.currFileURI,
+					Loc:     bounds,
+				})
+				typeScope.addLocal(local)
 			}
 		}
 
 		tc.currentScope = &typeScope
 	}
+}
+
+func (tc *typeChecker) getSymbolFromScope(scope *parse.Scope) parse.JavaSymbol {
+	if scope.Type.IsClassType() {
+		return tc.lookupType(scope.Name)
+	}
+
+	// it's a method, should be inside a class
+	if tc.currentScope.Symbol == nil {
+		tc.logger.Error(fmt.Sprintf("can't get symbol from scope, tc.currentScope.Symbol is nil. Scope: %v", scope))
+		return nil
+	}
+
+	enclosingType, ok := tc.currentScope.Symbol.(*parse.JavaType)
+	if !ok {
+		tc.logger.Error(fmt.Sprintf("can't get symbol from scope, enclosing type is %T. Scope: %v", tc.currentScope.Symbol, scope))
+		return nil
+	}
+
+	// Look up method on enclosingType
+	return enclosingType.LookupMethod(scope.Name)
 }
 
 func (tc *typeChecker) ExitEveryRule(ctx antlr.ParserRuleContext) {
@@ -255,7 +288,7 @@ func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx, bounds p
 		}
 
 		// TODO fix bounds, the error message also red underlines the equals sign
-		tc.checkAndAddLocal(varName, ttype, parse.ParserRuleContextToBounds(ident), scopeType)
+		tc.checkAndAddVariable(varName, ttype, parse.ParserRuleContextToBounds(ident), scopeType)
 	}
 
 	// Make sure every value in the expression stack (which is the value of all the initializer expressions
@@ -276,7 +309,7 @@ func (tc *typeChecker) handleUntypedLocalVariableDecl(ctx *javaparser.UntypedLoc
 	// In order for type to be inferred, we must have already pushed the expression type
 	ttype := tc.expressionStack.Pop().ttype
 
-	tc.checkAndAddLocal(ctx.Identifier().GetText(), ttype, parse.ParserRuleContextToBounds(ctx.Identifier()), "method")
+	tc.checkAndAddVariable(ctx.Identifier().GetText(), ttype, parse.ParserRuleContextToBounds(ctx.Identifier()), "method")
 }
 
 func (tc *typeChecker) ExitPrimary(ctx *javaparser.PrimaryContext) {
@@ -362,14 +395,14 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 	topTypeScope := tc.currentScope
 	ident, ok := topTypeScope.Locals[identName]
 	if ok {
-		tc.pushExprType(ident.SymbolType, bounds)
+		tc.pushExprType(ident.Type, bounds)
 		return
 	}
 
 	enclosing := tc.getEnclosingType()
 	field := enclosing.LookupField(identName)
 	if field != nil {
-		tc.pushExprType(field.Type, bounds)
+		tc.pushExprType(field.ParentType, bounds)
 		return
 	}
 

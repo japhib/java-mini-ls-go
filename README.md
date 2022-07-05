@@ -61,6 +61,16 @@ It's great when the IDE can show how to
   - Turn index-based for loops into for-range loops
   - Use new switch expressions & pattern-matching where possible
 
+# Development
+
+Uses [golangci-lint](https://golangci-lint.run/) for linting. Install on Mac with:
+
+```sh
+brew install golangci-lint
+```
+
+Make sure to run `./lint.sh` before committing!
+
 # Credit
 
 - [Replit](https://replit.com) for the motivation

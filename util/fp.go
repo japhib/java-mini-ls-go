@@ -35,9 +35,7 @@ func CombineSlices[T any](inputs ...[]T) []T {
 
 	ret := make([]T, 0, totalLength)
 	for _, slice := range inputs {
-		for _, item := range slice {
-			ret = append(ret, item)
-		}
+		ret = append(ret, slice...)
 	}
 
 	return ret

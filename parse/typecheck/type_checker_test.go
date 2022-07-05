@@ -2,6 +2,7 @@ package typecheck
 
 import (
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap/zaptest"
 	"java-mini-ls-go/parse"
 	"testing"
 )
@@ -22,7 +23,7 @@ func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
 	parse.AddPrimitiveTypes(builtins)
 	userTypes := GatherTypes(tree, builtins)
 
-	return CheckTypes(tree, "type_checker_test", userTypes, builtins)
+	return CheckTypes(zaptest.NewLogger(t), tree, "type_checker_test", userTypes, builtins)
 }
 
 func TestCheckTypes_Addition(t *testing.T) {

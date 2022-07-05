@@ -45,8 +45,8 @@ public class Main {
 		"Main": {
 			Name:    "Main",
 			Package: "stuff",
-			Methods: map[string]*parse.JavaMethod{
-				"main": {
+			Methods: []*parse.JavaMethod{
+				{
 					Name: "main",
 					// void -> nil
 					ReturnType: nil,
@@ -60,10 +60,12 @@ public class Main {
 				},
 			},
 			Constructors: []*parse.JavaConstructor{},
-			Fields:       map[string]*parse.JavaField{},
+			Fields:       []*parse.JavaField{},
 			Type:         parse.JavaTypeClass,
 			Extends:      []*parse.JavaType{},
 			Implements:   []*parse.JavaType{},
+			Usages:       []parse.CodeLocation{},
+			Visibility:   parse.VisibilityPublic,
 		},
 	}
 
@@ -105,18 +107,19 @@ class MyClass {
 	}
 
 	types := GatherTypes(tree, builtins)
+	nilOutCircularRefs(types)
 
 	nestedType := &parse.JavaType{
 		Name: "Nested",
 		Type: parse.JavaTypeClass,
-		Fields: map[string]*parse.JavaField{
-			"nestedInt": {
-				Name: "nestedInt",
-				Type: intType,
+		Fields: []*parse.JavaField{
+			{
+				Name:       "nestedInt",
+				ParentType: intType,
 			},
 		},
 		Constructors: []*parse.JavaConstructor{},
-		Methods:      map[string]*parse.JavaMethod{},
+		Methods:      []*parse.JavaMethod{},
 		Extends:      []*parse.JavaType{},
 		Implements:   []*parse.JavaType{},
 	}
@@ -124,23 +127,23 @@ class MyClass {
 	expectedTypes := parse.TypeMap{
 		"MyClass": {
 			Name: "MyClass",
-			Fields: map[string]*parse.JavaField{
-				"name": {
+			Fields: []*parse.JavaField{
+				{
 					Name: "name",
 					Type: strType,
 				},
-				"asdf": {
+				{
 					Name: "asdf",
 					Type: intType,
 				},
-				"n": {
+				{
 					Name: "n",
 					Type: nestedType,
 				},
 			},
 			Constructors: []*parse.JavaConstructor{
 				{
-					Arguments: []*parse.JavaParameter{
+					Params: []*parse.JavaParameter{
 						{
 							Name: "f",
 							Type: intType,
@@ -148,8 +151,8 @@ class MyClass {
 					},
 				},
 			},
-			Methods: map[string]*parse.JavaMethod{
-				"DoSomething": {
+			Methods: []*parse.JavaMethod{
+				{
 					Name:       "DoSomething",
 					ReturnType: intType,
 					Params:     []*parse.JavaParameter{},
@@ -163,6 +166,22 @@ class MyClass {
 	}
 
 	assert.Equal(t, expectedTypes, types)
+}
+
+// nilOutCircularRefs sets backreferences (ParentType) inside a type to be nil
+// so that it's easier to test
+func nilOutCircularRefs(types parse.TypeMap) {
+	for _, ttype := range types {
+		for _, constructor := range ttype.Constructors {
+			constructor.ParentType = nil
+		}
+		for _, method := range ttype.Methods {
+			method.ParentType = nil
+		}
+		for _, field := range ttype.Fields {
+			field.ParentType = nil
+		}
+	}
 }
 
 func TestGatherTypes_Enum(t *testing.T) {
@@ -192,7 +211,7 @@ enum MyEnum {
 			Type: parse.JavaTypeEnum,
 			Constructors: []*parse.JavaConstructor{
 				{
-					Arguments: []*parse.JavaParameter{
+					Params: []*parse.JavaParameter{
 						{
 							Name: "v",
 							Type: strType,
@@ -200,14 +219,14 @@ enum MyEnum {
 					},
 				},
 			},
-			Fields: map[string]*parse.JavaField{
-				"value": {
-					Name: "value",
-					Type: strType,
+			Fields: []*parse.JavaField{
+				{
+					Name:       "value",
+					ParentType: strType,
 				},
 			},
-			Methods: map[string]*parse.JavaMethod{
-				"getValue": {
+			Methods: []*parse.JavaMethod{
+				{
 					Name:       "getValue",
 					ReturnType: strType,
 					Params:     []*parse.JavaParameter{},

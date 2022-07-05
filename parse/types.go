@@ -7,6 +7,42 @@ import (
 	"strings"
 )
 
+type JavaSymbolKind int
+
+const (
+	JavaSymbolType        JavaSymbolKind = iota
+	JavaSymbolConstructor JavaSymbolKind = iota
+	JavaSymbolMethod      JavaSymbolKind = iota
+	JavaSymbolField       JavaSymbolKind = iota
+	JavaSymbolLocal       JavaSymbolKind = iota
+)
+
+type JavaSymbol interface {
+	// Kind returns what type of symbol this is
+	Kind() JavaSymbolKind
+
+	// PackageName returns the package name for this symbol
+	PackageName() string
+
+	// ShortName returns the short name for this symbol
+	ShortName() string
+
+	// FullName returns the fully-qualified name for this symbol.
+	// However much is applicable of:
+	// {package}.{class}.{method_or_field}.{args}
+	FullName() string
+
+	// GetVisibility returns the visibility of this symbol
+	GetVisibility() VisibilityType
+
+	// GetDefinition returns the location in code where this symbol is defined.
+	// May be nil for built-in or library types.
+	GetDefinition() *CodeLocation
+
+	// GetUsages returns a list of all usages of this symbol.
+	GetUsages() []CodeLocation
+}
+
 type VisibilityType int
 
 const (
@@ -14,6 +50,7 @@ const (
 	VisibilityPrivate   VisibilityType = iota
 	VisibilityPublic    VisibilityType = iota
 	VisibilityProtected VisibilityType = iota
+	VisibilityLocal     VisibilityType = iota
 )
 
 var VisibilityTypeStrs = map[VisibilityType]string{
@@ -21,6 +58,7 @@ var VisibilityTypeStrs = map[VisibilityType]string{
 	VisibilityPrivate:   "private",
 	VisibilityPublic:    "public",
 	VisibilityProtected: "protected",
+	VisibilityLocal:     "<local>",
 }
 
 type JavaTypeType int
@@ -60,16 +98,77 @@ type JavaType struct {
 	Extends      []*JavaType
 	Implements   []*JavaType
 	Constructors []*JavaConstructor
-	Fields       map[string]*JavaField
-	// TODO handle method overloads
-	Methods    map[string]*JavaMethod
+	Fields       []*JavaField
+	Methods      []*JavaMethod
+
+	// Definition stores where this symbol is defined in the code.
+	// Is nil for built-in/library types.
+	Definition *CodeLocation
+	// Usages stores all code locations where this type is referenced.
+	Usages []CodeLocation
+
 	Visibility VisibilityType
 	Type       JavaTypeType
 }
 
+func NewJavaType(name string, ppackage string, visibility VisibilityType, ttype JavaTypeType) *JavaType {
+	return &JavaType{
+		Name:         name,
+		Package:      ppackage,
+		Module:       "",
+		Extends:      make([]*JavaType, 0),
+		Implements:   make([]*JavaType, 0),
+		Constructors: make([]*JavaConstructor, 0),
+		Fields:       make([]*JavaField, 0),
+		Methods:      make([]*JavaMethod, 0),
+		Definition:   nil,
+		Usages:       make([]CodeLocation, 0),
+		Visibility:   visibility,
+		Type:         ttype,
+	}
+}
+
+func NewPrimitiveType(name string) *JavaType {
+	return NewJavaType(name, "", VisibilityPublic, JavaTypePrimitive)
+}
+
+// Compile-time check that JavaType implements JavaSymbol interface
+var _ JavaSymbol = (*JavaType)(nil)
+
+func (jt *JavaType) Kind() JavaSymbolKind {
+	return JavaSymbolType
+}
+
+func (jt *JavaType) PackageName() string {
+	return jt.Package
+}
+
+func (jt *JavaType) ShortName() string {
+	return jt.Name
+}
+
+func (jt *JavaType) FullName() string {
+	return fmt.Sprintf("%s.%s", jt.Package, jt.Name)
+}
+
+func (jt *JavaType) GetVisibility() VisibilityType {
+	return jt.Visibility
+}
+
+func (jt *JavaType) GetDefinition() *CodeLocation {
+	return jt.Definition
+}
+
+func (jt *JavaType) GetUsages() []CodeLocation {
+	return jt.Usages
+}
+
 func (jt *JavaType) LookupField(name string) *JavaField {
-	if field, ok := jt.Fields[name]; ok {
-		return field
+	idx := slices.IndexFunc(jt.Fields, func(field *JavaField) bool {
+		return field.Name == name
+	})
+	if idx != -1 {
+		return jt.Fields[idx]
 	}
 
 	// Go to parent class/interfaces and see if any of them have the field
@@ -77,6 +176,27 @@ func (jt *JavaType) LookupField(name string) *JavaField {
 		field := supertype.LookupField(name)
 		if field != nil {
 			return field
+		}
+	}
+
+	// Not found
+	return nil
+}
+
+// TODO handle overrides
+func (jt *JavaType) LookupMethod(name string) *JavaMethod {
+	idx := slices.IndexFunc(jt.Methods, func(method *JavaMethod) bool {
+		return method.Name == name
+	})
+	if idx != -1 {
+		return jt.Methods[idx]
+	}
+
+	// Go to parent class/interfaces and see if any of them have the field
+	for _, supertype := range jt.Extends {
+		method := supertype.LookupMethod(name)
+		if method != nil {
+			return method
 		}
 	}
 
@@ -170,26 +290,140 @@ func (jt *JavaType) CoercesTo(other *JavaType) bool {
 type JavaField struct {
 	Name       string
 	Type       *JavaType
+	ParentType *JavaType
+
+	// Definition stores where this symbol is defined in the code.
+	// Is nil for built-in/library types.
+	Definition *CodeLocation
+	// Usages stores all code locations where this type is referenced.
+	Usages []CodeLocation
+
 	Visibility VisibilityType
 	IsStatic   bool
 	IsFinal    bool
 }
 
+var _ JavaSymbol = (*JavaField)(nil)
+
+func (jf *JavaField) Kind() JavaSymbolKind {
+	return JavaSymbolField
+}
+
+func (jf *JavaField) PackageName() string {
+	return jf.ParentType.Package
+}
+
+func (jf *JavaField) ShortName() string {
+	return jf.Name
+}
+
+func (jf *JavaField) FullName() string {
+	return fmt.Sprintf("%s.%s", jf.ParentType.FullName(), jf.Name)
+}
+
+func (jf *JavaField) GetVisibility() VisibilityType {
+	return jf.Visibility
+}
+
+func (jf *JavaField) GetDefinition() *CodeLocation {
+	return jf.Definition
+}
+
+func (jf *JavaField) GetUsages() []CodeLocation {
+	return jf.Usages
+}
+
 func (jf *JavaField) String() string {
-	return fmt.Sprintf("%s %s%s %s", VisibilityTypeStrs[jf.Visibility], getStaticStr(jf.IsStatic), jf.Type.Name, jf.Name)
+	return fmt.Sprintf("%s %s%s %s", VisibilityTypeStrs[jf.Visibility], getStaticStr(jf.IsStatic), jf.ParentType.Name, jf.Name)
 }
 
 type JavaConstructor struct {
+	ParentType *JavaType
+	Params     []*JavaParameter
+
+	// Definition stores where this constructor is defined in the code.
+	// Is nil for built-in/library types.
+	Definition *CodeLocation
+	// Usages stores all code locations where this constructor is referenced.
+	Usages []CodeLocation
+
 	Visibility VisibilityType
-	Arguments  []*JavaParameter
+}
+
+var _ JavaSymbol = (*JavaConstructor)(nil)
+
+func (jc *JavaConstructor) Kind() JavaSymbolKind {
+	return JavaSymbolConstructor
+}
+
+func (jc *JavaConstructor) PackageName() string {
+	return jc.ParentType.Package
+}
+
+func (jc *JavaConstructor) ShortName() string {
+	return fmt.Sprintf("%s(%s)", jc.ParentType.Name, strings.Join(util.MapToString(jc.Params), ","))
+}
+
+func (jc *JavaConstructor) FullName() string {
+	return fmt.Sprintf("%s.%s", jc.ParentType.FullName(), jc.ShortName())
+}
+
+func (jc *JavaConstructor) GetVisibility() VisibilityType {
+	return jc.Visibility
+}
+
+func (jc *JavaConstructor) GetDefinition() *CodeLocation {
+	return jc.Definition
+}
+
+func (jc *JavaConstructor) GetUsages() []CodeLocation {
+	return jc.Usages
 }
 
 type JavaMethod struct {
 	Name       string
+	ParentType *JavaType
 	ReturnType *JavaType
 	Params     []*JavaParameter
+
+	// Definition stores where this method is defined in the code.
+	// Is nil for built-in/library types.
+	Definition *CodeLocation
+	// Usages stores all code locations where this method is referenced.
+	Usages []CodeLocation
+
 	Visibility VisibilityType
 	IsStatic   bool
+}
+
+var _ JavaSymbol = (*JavaMethod)(nil)
+
+func (jm *JavaMethod) Kind() JavaSymbolKind {
+	return JavaSymbolMethod
+}
+
+func (jm *JavaMethod) PackageName() string {
+	return jm.ParentType.Package
+}
+
+func (jm *JavaMethod) ShortName() string {
+	return fmt.Sprintf("%s(%s)", jm.Name, strings.Join(util.MapToString(jm.Params), ","))
+}
+
+func (jm *JavaMethod) FullName() string {
+	return fmt.Sprintf("%s.%s", jm.ParentType.FullName(), jm.ShortName())
+}
+
+func (jm *JavaMethod) GetVisibility() VisibilityType {
+	return jm.Visibility
+}
+
+func (jm *JavaMethod) GetDefinition() *CodeLocation {
+	return jm.Definition
+}
+
+func (jm *JavaMethod) GetUsages() []CodeLocation {
+	return jm.Usages
 }
 
 func (jm *JavaMethod) String() string {
@@ -209,4 +443,55 @@ type JavaParameter struct {
 
 func (ja *JavaParameter) String() string {
 	return fmt.Sprintf("%s %s", ja.Type.Name, ja.Name)
+}
+
+type JavaLocal struct {
+	Name         string
+	Type         *JavaType
+	ParentMethod *JavaMethod
+
+	// Definition stores where this method is defined in the code.
+	Definition *CodeLocation
+	// Usages stores all code locations where this method is referenced.
+	Usages []CodeLocation
+}
+
+func NewJavaLocal(name string, ttype *JavaType, parentMethod *JavaMethod, definition CodeLocation) *JavaLocal {
+	return &JavaLocal{
+		Name:         name,
+		Type:         ttype,
+		ParentMethod: parentMethod,
+		Definition:   &definition,
+		Usages:       make([]CodeLocation, 0),
+	}
+}
+
+var _ JavaSymbol = (*JavaLocal)(nil)
+
+func (jl *JavaLocal) Kind() JavaSymbolKind {
+	return JavaSymbolLocal
+}
+
+func (jl *JavaLocal) PackageName() string {
+	return jl.ParentMethod.ParentType.Package
+}
+
+func (jl *JavaLocal) ShortName() string {
+	return jl.Name
+}
+
+func (jl *JavaLocal) FullName() string {
+	return fmt.Sprintf("%s:%s:%s", jl.ParentMethod.FullName(), jl.Type.FullName(), jl.Name)
+}
+
+func (jl *JavaLocal) GetVisibility() VisibilityType {
+	return VisibilityLocal
+}
+
+func (jl *JavaLocal) GetDefinition() *CodeLocation {
+	return jl.Definition
+}
+
+func (jl *JavaLocal) GetUsages() []CodeLocation {
+	return jl.Usages
 }

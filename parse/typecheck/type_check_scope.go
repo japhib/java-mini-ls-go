@@ -3,15 +3,17 @@ package typecheck
 import "java-mini-ls-go/parse"
 
 type TypeCheckingScope struct {
-	Locals   map[string]SymbolWithDefUsages
+	Symbol   parse.JavaSymbol
+	Locals   map[string]*parse.JavaLocal
 	Location parse.Bounds
 	Parent   *TypeCheckingScope
 	Children []TypeCheckingScope
 }
 
-func newTypeCheckingScope(parent *TypeCheckingScope, bounds parse.Bounds) TypeCheckingScope {
+func newTypeCheckingScope(symbol parse.JavaSymbol, parent *TypeCheckingScope, bounds parse.Bounds) TypeCheckingScope {
 	newScope := TypeCheckingScope{
-		Locals:   make(map[string]SymbolWithDefUsages),
+		Symbol:   symbol,
+		Locals:   make(map[string]*parse.JavaLocal),
 		Children: []TypeCheckingScope{},
 		Location: bounds,
 	}
@@ -24,16 +26,8 @@ func newTypeCheckingScope(parent *TypeCheckingScope, bounds parse.Bounds) TypeCh
 	return newScope
 }
 
-func (tcs *TypeCheckingScope) addLocal(name string, ttype *parse.JavaType, bounds parse.Bounds, fileURI string) {
-	tcs.Locals[name] = SymbolWithDefUsages{
-		SymbolName: name,
-		SymbolType: ttype,
-		Definition: parse.CodeLocation{
-			FileUri: fileURI,
-			Loc:     bounds,
-		},
-		Usages: make([]parse.CodeLocation, 0),
-	}
+func (tcs *TypeCheckingScope) addLocal(local *parse.JavaLocal) {
+	tcs.Locals[local.Name] = local
 }
 
 func (tcs *TypeCheckingScope) Contains(location parse.FileLocation) bool {

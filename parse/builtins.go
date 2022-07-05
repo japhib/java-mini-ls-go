@@ -52,6 +52,7 @@ func LoadBuiltinTypes() (TypeMap, error) {
 
 type javaJsonType struct {
 	Name         string                `json:"name"`
+	Type         string                `json:"type"`
 	Module       string                `json:"module"`
 	Package      string                `json:"package"`
 	Extends      []string              `json:"extends"`
@@ -173,11 +174,51 @@ func AddPrimitiveTypes(typeMap TypeMap) {
 	}
 
 	for _, name := range primitives {
-		typeMap[name] = &JavaType{
-			Name:       name,
-			Visibility: VisibilityPublic,
-			Type:       JavaTypePrimitive,
-		}
+		typeMap[name] = NewPrimitiveType(name)
+	}
+}
+
+func convertJsonTypeType(jsonTypeType string) JavaTypeType {
+	switch jsonTypeType {
+	case "class":
+		return JavaTypeClass
+	case "interface":
+		return JavaTypeInterface
+	case "enum":
+		return JavaTypeEnum
+	case "annotation":
+		return JavaTypeAnnotation
+	case "record":
+		return JavaTypeRecord
+	default:
+		fmt.Println("Unknown Java JSON type type: ", jsonTypeType)
+		return JavaTypeClass
+	}
+}
+
+func convertJsonField(parentType *JavaType, jsonField javaJsonField) *JavaField {
+	return &JavaField{
+		Name:       jsonField.Name,
+		ParentType: parentType,
+		Type:       getOrCreateBuiltinType(jsonField.Type),
+		Visibility: VisibilityPublic,
+		IsStatic:   slices.Contains(jsonField.Modifiers, "static"),
+		IsFinal:    slices.Contains(jsonField.Modifiers, "final"),
+		Definition: nil,
+		Usages:     []CodeLocation{},
+	}
+}
+
+func convertJsonMethod(parentType *JavaType, jsonMethod javaJsonMethod) *JavaMethod {
+	return &JavaMethod{
+		Name:       jsonMethod.Name,
+		ParentType: parentType,
+		ReturnType: getOrCreateBuiltinType(jsonMethod.Type),
+		Params:     util.Map(jsonMethod.Args, toArg),
+		Visibility: VisibilityPublic,
+		IsStatic:   slices.Contains(jsonMethod.Modifiers, "static"),
+		Definition: nil,
+		Usages:     []CodeLocation{},
 	}
 }
 
@@ -185,14 +226,8 @@ func AddPrimitiveTypes(typeMap TypeMap) {
 func loadJsonTypes(jsonTypes []javaJsonType) error {
 	// First, get just the bare types defined
 	for _, jsonType := range jsonTypes {
-		builtinTypes[jsonType.Name] = &JavaType{
-			Name:       jsonType.Name,
-			Package:    jsonType.Package,
-			Module:     jsonType.Module,
-			Visibility: VisibilityPublic,
-			Fields:     nil,
-			Methods:    nil,
-		}
+		newType := NewJavaType(jsonType.Name, jsonType.Package, VisibilityPublic, convertJsonTypeType(jsonType.Type))
+		builtinTypes[jsonType.Name] = newType
 	}
 
 	// Next, fill in extends/implements references
@@ -212,46 +247,26 @@ func loadJsonTypes(jsonTypes []javaJsonType) error {
 
 		for _, jsonConstructor := range jsonType.Constructors {
 			constructors = append(constructors, &JavaConstructor{
+				ParentType: builtinTypes[jsonType.Name],
+				Params:     util.Map(jsonConstructor.Args, toArg),
+				Definition: nil,
+				Usages:     []CodeLocation{},
 				Visibility: VisibilityPublic,
-				Arguments:  util.Map(jsonConstructor.Args, toArg),
 			})
 		}
 
 		builtinTypes[jsonType.Name].Constructors = constructors
 	}
 
-	// Next, fill in the fields
+	// Next, fill in the fields & methods
 	for _, jsonType := range jsonTypes {
-		fields := make(map[string]*JavaField, len(jsonType.Fields))
-
-		for _, jsonField := range jsonType.Fields {
-			fields[jsonField.Name] = &JavaField{
-				Name:       jsonField.Name,
-				Visibility: VisibilityPublic,
-				Type:       getOrCreateBuiltinType(jsonField.Type),
-				IsStatic:   slices.Contains(jsonField.Modifiers, "static"),
-				IsFinal:    slices.Contains(jsonField.Modifiers, "final"),
-			}
-		}
-
-		builtinTypes[jsonType.Name].Fields = fields
-	}
-
-	// Next, fill in the methods
-	for _, jsonType := range jsonTypes {
-		methods := make(map[string]*JavaMethod, len(jsonType.Methods))
-
-		for _, jsonMethod := range jsonType.Methods {
-			methods[jsonMethod.Name] = &JavaMethod{
-				Name:       jsonMethod.Name,
-				Visibility: VisibilityPublic,
-				ReturnType: getOrCreateBuiltinType(jsonMethod.Type),
-				Params:     util.Map(jsonMethod.Args, toArg),
-				IsStatic:   slices.Contains(jsonMethod.Modifiers, "static"),
-			}
-		}
-
-		builtinTypes[jsonType.Name].Methods = methods
+		javaType := builtinTypes[jsonType.Name]
+		javaType.Fields = util.Map(jsonType.Fields, func(jsonField javaJsonField) *JavaField {
+			return convertJsonField(javaType, jsonField)
+		})
+		javaType.Methods = util.Map(jsonType.Methods, func(jsonMethod javaJsonMethod) *JavaMethod {
+			return convertJsonMethod(javaType, jsonMethod)
+		})
 	}
 
 	return nil
@@ -270,10 +285,7 @@ func getOrCreateBuiltinType(name string) *JavaType {
 	jtype, ok := builtinTypes[name]
 	if !ok {
 		//fmt.Println("Creating built-in type: ", name)
-		jtype = &JavaType{
-			Name:       name,
-			Visibility: VisibilityPublic,
-		}
+		jtype = NewJavaType(name, "", VisibilityPublic, JavaTypeClass)
 		builtinTypes[name] = jtype
 	}
 

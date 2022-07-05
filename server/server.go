@@ -126,7 +126,7 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	j.symbols.Set(uriString, symbols)
 
 	userTypes := typecheck.GatherTypes(parsed, j.builtinTypes)
-	typeCheckingResult := typecheck.CheckTypes(parsed, uriString, userTypes, j.builtinTypes)
+	typeCheckingResult := typecheck.CheckTypes(j.log, parsed, uriString, userTypes, j.builtinTypes)
 	j.scopes.Set(uriString, typeCheckingResult.RootScope)
 	j.defUsages.Set(uriString, typeCheckingResult.DefUsagesLookup)
 
@@ -203,7 +203,7 @@ func (j *JavaLS) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 			// For now just return the variable name + type
 			return &protocol.Hover{Contents: protocol.MarkupContent{
 				Kind:  protocol.Markdown,
-				Value: fmt.Sprintf("**%s** %s", symbol.SymbolName, symbol.SymbolType.Name),
+				Value: fmt.Sprintf("**%s** %s", symbol.ShortName(), symbol.FullName()),
 			}}, nil
 		}
 	}

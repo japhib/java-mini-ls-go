@@ -14,11 +14,10 @@ func GatherTypes(tree antlr.Tree, builtins parse.TypeMap) parse.TypeMap {
 	visitor := newTypeGatherer(builtins)
 
 	// First pass: just get types (no fields/methods yet, since those will reference the types)
-	visitor.isFirstPass = true
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 
 	// Second pass: populate fields/methods on every type
-	visitor.isFirstPass = false
+	visitor.setSecondPass()
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 
 	return visitor.types
@@ -149,36 +148,21 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 		varDecls := varDeclsI.(*javaparser.VariableDeclaratorsContext)
 		for _, varDecl := range varDecls.AllVariableDeclarator() {
 			field := &parse.JavaField{
-				Name:     varDecl.GetText(),
-				Type:     fieldType,
-				IsStatic: tg.currentMemberIsStatic,
+				Name:       varDecl.GetText(),
+				Type:       fieldType,
+				ParentType: currType,
+				IsStatic:   tg.currentMemberIsStatic,
 			}
 
-			currType.Fields[field.Name] = field
+			currType.Fields = append(currType.Fields, field)
 		}
 	}
 }
 
 func (tg *typeGatherer) addNewTypeFromScope(scope *parse.Scope, ttype parse.JavaTypeType) {
-	newType := &parse.JavaType{
-		Name:         scope.Name,
-		Package:      tg.currPackageName,
-		Constructors: make([]*parse.JavaConstructor, 0),
-		Fields:       make(map[string]*parse.JavaField),
-		Methods:      make(map[string]*parse.JavaMethod),
-		Type:         ttype,
-	}
-
+	newType := parse.NewJavaType(scope.Name, tg.currPackageName, parse.VisibilityPublic, ttype)
 	tg.types[scope.Name] = newType
-
-	tg.defUsages.NewSymbol(scope.Bounds, NewSymbolWithDefUsages(
-		scope.Name,
-		newType,
-		parse.CodeLocation{
-			FileUri: "",
-			Loc:     scope.Bounds,
-		}),
-	)
+	tg.defUsages.NewSymbol(scope.Bounds, newType)
 }
 
 func (tg *typeGatherer) checkScopeExtendsImplements(scope *parse.Scope, ctx antlr.ParserRuleContext) {
@@ -251,7 +235,7 @@ func (tg *typeGatherer) addNewConstructorFromScope(ctx formalParametersCtx) {
 	currType := tg.types[currTypeName]
 
 	newConstructor := &parse.JavaConstructor{
-		Arguments: tg.getArgsFromContext(ctx),
+		Params: tg.getArgsFromContext(ctx),
 	}
 
 	currType.Constructors = append(currType.Constructors, newConstructor)
@@ -277,7 +261,7 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx)
 	method.Params = tg.getArgsFromContext(ctx)
 	method.IsStatic = tg.currentMemberIsStatic
 
-	currType.Methods[method.Name] = method
+	currType.Methods = append(currType.Methods, method)
 }
 
 func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*parse.JavaParameter {
