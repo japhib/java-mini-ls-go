@@ -2,9 +2,10 @@ package parse
 
 import (
 	"fmt"
-	"golang.org/x/exp/slices"
 	"java-mini-ls-go/util"
 	"strings"
+
+	"golang.org/x/exp/slices"
 )
 
 type JavaSymbolKind int
@@ -220,9 +221,7 @@ func (jt *JavaType) AllSuperClasses() []*JavaType {
 		supers = append(supers, e)
 
 		// Recursively append superclasses of that superclass
-		for _, ee := range e.AllSuperClasses() {
-			supers = append(supers, ee)
-		}
+		supers = append(supers, e.AllSuperClasses()...)
 	}
 
 	return supers

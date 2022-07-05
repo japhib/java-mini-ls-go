@@ -1,6 +1,7 @@
 run:
   skip-dirs:
     - javaparser
+  tests: false
 linters:
   enable:
     - exhaustruct

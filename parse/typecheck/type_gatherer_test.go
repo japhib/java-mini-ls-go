@@ -39,7 +39,7 @@ public class Main {
 		"String": strType,
 	}
 
-	types := GatherTypes(tree, builtins)
+	types := GatherTypes("testfile", tree, builtins)
 
 	expectedTypes := parse.TypeMap{
 		"Main": {
@@ -106,7 +106,7 @@ class MyClass {
 		"int":    intType,
 	}
 
-	types := GatherTypes(tree, builtins)
+	types := GatherTypes("testfile", tree, builtins)
 	nilOutCircularRefs(types)
 
 	nestedType := &parse.JavaType{
@@ -203,7 +203,7 @@ enum MyEnum {
 
 	strType := &parse.JavaType{Name: "String"}
 	builtins := parse.TypeMap{"String": strType}
-	types := GatherTypes(tree, builtins)
+	types := GatherTypes("testfile", tree, builtins)
 
 	expectedTypes := parse.TypeMap{
 		"MyEnum": &parse.JavaType{

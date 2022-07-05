@@ -3,14 +3,15 @@ package parse
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
-	"golang.org/x/exp/slices"
 	"io/ioutil"
 	"java-mini-ls-go/util"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
+	"golang.org/x/exp/slices"
 )
 
 type TypeMap map[string]*JavaType
@@ -274,8 +275,9 @@ func loadJsonTypes(jsonTypes []javaJsonType) error {
 
 func toArg(arg javaJsonArg) *JavaParameter {
 	return &JavaParameter{
-		Name: arg.Name,
-		Type: getOrCreateBuiltinType(arg.Type),
+		Name:      arg.Name,
+		Type:      getOrCreateBuiltinType(arg.Type),
+		IsVarargs: false,
 	}
 }
 

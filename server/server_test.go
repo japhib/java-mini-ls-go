@@ -2,13 +2,14 @@ package server
 
 import (
 	"context"
+	"java-mini-ls-go/util"
+	"testing"
+	"time"
+
 	"github.com/stretchr/testify/assert"
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
 	"go.uber.org/zap/zaptest"
-	"java-mini-ls-go/util"
-	"testing"
-	"time"
 )
 
 func testCtx() (context.Context, context.CancelFunc) {

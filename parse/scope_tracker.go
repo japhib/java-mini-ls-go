@@ -12,6 +12,7 @@ import (
 type ScopeType int
 
 const (
+	ScopeTypeUnset                  ScopeType = iota
 	ScopeTypeAnnotationType         ScopeType = iota
 	ScopeTypeClass                  ScopeType = iota
 	ScopeTypeConstructor            ScopeType = iota
@@ -126,6 +127,8 @@ func (st *ScopeTracker) shouldCreateScope(ruleType int) bool {
 
 func (st *ScopeTracker) createScope(parent *Scope, ctx antlr.ParserRuleContext) *Scope {
 	ret := &Scope{
+		Name:     "",
+		Type:     ScopeTypeUnset,
 		Bounds:   ParserRuleContextToBounds(ctx),
 		Parent:   parent,
 		Children: make([]*Scope, 0),

@@ -33,7 +33,8 @@ func Parse(input string) (*javaparser.CompilationUnitContext, []SyntaxError) {
 
 	p := javaparser.NewJavaParser(stream)
 	errListener := &errorListener{
-		errors: make([]SyntaxError, 0),
+		DefaultErrorListener: &antlr.DefaultErrorListener{},
+		errors:               make([]SyntaxError, 0),
 	}
 	p.AddErrorListener(errListener)
 	p.BuildParseTrees = true
@@ -50,13 +51,15 @@ type SyntaxError struct {
 
 func (se *SyntaxError) ToDiagnostic() protocol.Diagnostic {
 	return protocol.Diagnostic{
-		Range: BoundsToRange(Bounds{
-			Start: se.Loc,
-			End:   FileLocation{se.Loc.Line, se.Loc.Column + len(se.Token)},
-		}),
-		Severity: protocol.DiagnosticSeverityError,
-		Source:   "java-mini-ls",
-		Message:  se.Message,
+		Range:              BoundsToRange(Bounds{Start: se.Loc, End: FileLocation{se.Loc.Line, se.Loc.Column + len(se.Token)}}),
+		Severity:           protocol.DiagnosticSeverityError,
+		Code:               nil,
+		CodeDescription:    nil,
+		Source:             "java-mini-ls",
+		Message:            se.Message,
+		Tags:               []protocol.DiagnosticTag{},
+		RelatedInformation: []protocol.DiagnosticRelatedInformation{},
+		Data:               nil,
 	}
 }
 

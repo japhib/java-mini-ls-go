@@ -69,12 +69,10 @@ func NewCodeSymbol(name string, ttype CodeSymbolType, fromRule antlr.ParserRuleC
 	stopToken := fromRule.GetStop()
 
 	return &CodeSymbol{
-		Name: name,
-		Type: ttype,
-		Bounds: Bounds{
-			Start: FileLocation{startToken.GetLine(), startToken.GetColumn()},
-			End:   FileLocation{stopToken.GetLine(), stopToken.GetColumn()},
-		},
+		Name:     name,
+		Type:     ttype,
+		Detail:   "",
+		Bounds:   Bounds{Start: FileLocation{startToken.GetLine(), startToken.GetColumn()}, End: FileLocation{stopToken.GetLine(), stopToken.GetColumn()}},
 		Children: make([]*CodeSymbol, 0),
 	}
 }
@@ -102,9 +100,10 @@ func (cs *CodeSymbol) String() string {
 // FindSymbols is the entrypoint for finding topLevelSymbols in a source file
 func FindSymbols(tree antlr.Tree) []*CodeSymbol {
 	visitor := &symbolVisitor{
-		scopeTracker:    NewScopeTracker(),
-		topLevelSymbols: make([]*CodeSymbol, 0),
-		symbolStack:     util.NewStack[*CodeSymbol](),
+		BaseJavaParserListener: javaparser.BaseJavaParserListener{},
+		scopeTracker:           NewScopeTracker(),
+		topLevelSymbols:        make([]*CodeSymbol, 0),
+		symbolStack:            util.NewStack[*CodeSymbol](),
 	}
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 	return visitor.topLevelSymbols

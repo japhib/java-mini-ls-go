@@ -2,15 +2,16 @@ package typecheck
 
 import (
 	"fmt"
-	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"go.lsp.dev/protocol"
-	"go.uber.org/zap"
-	"golang.org/x/exp/slices"
 	"java-mini-ls-go/javaparser"
 	"java-mini-ls-go/parse"
 	"java-mini-ls-go/util"
 	"math"
 	"strings"
+
+	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"go.lsp.dev/protocol"
+	"go.uber.org/zap"
+	"golang.org/x/exp/slices"
 )
 
 type TypeError struct {
@@ -20,10 +21,15 @@ type TypeError struct {
 
 func (te *TypeError) ToDiagnostic() protocol.Diagnostic {
 	return protocol.Diagnostic{
-		Range:    parse.BoundsToRange(te.Loc),
-		Severity: protocol.DiagnosticSeverityError,
-		Source:   "java-mini-ls",
-		Message:  te.Message,
+		Range:              parse.BoundsToRange(te.Loc),
+		Severity:           protocol.DiagnosticSeverityError,
+		Code:               nil,
+		CodeDescription:    nil,
+		Source:             "java-mini-ls",
+		Message:            te.Message,
+		Tags:               []protocol.DiagnosticTag{},
+		RelatedInformation: []protocol.DiagnosticRelatedInformation{},
+		Data:               nil,
 	}
 }
 
@@ -100,16 +106,17 @@ func newTypeChecker(logger *zap.Logger, fileURI string, userTypes parse.TypeMap,
 	)
 
 	return &typeChecker{
-		logger:          logger.Named("typeChecker"),
-		currFileURI:     fileURI,
-		userTypes:       userTypes,
-		builtins:        builtins,
-		errors:          make([]TypeError, 0),
-		scopeTracker:    parse.NewScopeTracker(),
-		rootScope:       rootScope,
-		currentScope:    &rootScope,
-		defUsages:       NewDefinitionsUsagesLookup(),
-		expressionStack: util.NewStack[typedExpression](),
+		BaseJavaParserListener: javaparser.BaseJavaParserListener{},
+		logger:                 logger.Named("typeChecker"),
+		currFileURI:            fileURI,
+		userTypes:              userTypes,
+		builtins:               builtins,
+		errors:                 make([]TypeError, 0),
+		scopeTracker:           parse.NewScopeTracker(),
+		rootScope:              rootScope,
+		currentScope:           &rootScope,
+		defUsages:              NewDefinitionsUsagesLookup(),
+		expressionStack:        util.NewStack[typedExpression](),
 	}
 }
 
@@ -129,10 +136,7 @@ func (tc *typeChecker) lookupType(typeName string) *parse.JavaType {
 
 	// Type doesn't exist, create it
 	fmt.Println("Creating built-in type: ", typeName)
-	jtype := &parse.JavaType{
-		Name:       typeName,
-		Visibility: parse.VisibilityPublic,
-	}
+	jtype := parse.NewJavaType(typeName, "", parse.VisibilityPublic, parse.JavaTypeClass)
 	tc.builtins[typeName] = jtype
 
 	return jtype
@@ -499,7 +503,6 @@ func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds parse.Bound
 	if !definitelyNotAssignment && strings.Contains(bop, "=") {
 		// Assignment is sort of a special case.
 		// Always returns the type of the left element
-		opType = "assignment"
 		returnType = left.ttype
 	} else {
 		returnType = tc.determineBopReturnType(left, right, opType, assertionFunc, returnTypeFunc)

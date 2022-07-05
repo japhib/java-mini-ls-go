@@ -14,8 +14,9 @@ func newTypeCheckingScope(symbol parse.JavaSymbol, parent *TypeCheckingScope, bo
 	newScope := TypeCheckingScope{
 		Symbol:   symbol,
 		Locals:   make(map[string]*parse.JavaLocal),
-		Children: []TypeCheckingScope{},
 		Location: bounds,
+		Parent:   parent,
+		Children: []TypeCheckingScope{},
 	}
 
 	if parent != nil {

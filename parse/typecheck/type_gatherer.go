@@ -10,8 +10,8 @@ import (
 
 // GatherTypes traverses the given parse tree and gathers all class, method, field, etc. declarations.
 // TODO doesn't get visibility of any types.
-func GatherTypes(tree antlr.Tree, builtins parse.TypeMap) parse.TypeMap {
-	visitor := newTypeGatherer(builtins)
+func GatherTypes(fileURI string, tree antlr.Tree, builtins parse.TypeMap) parse.TypeMap {
+	visitor := newTypeGatherer(fileURI, builtins)
 
 	// First pass: just get types (no fields/methods yet, since those will reference the types)
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
@@ -38,18 +38,23 @@ type typeGatherer struct {
 	builtins              parse.TypeMap
 	types                 parse.TypeMap
 	defUsages             *DefinitionsUsagesLookup
+	currFileURI           string
 	currPackageName       string
 	isFirstPass           bool
 	currentMemberIsStatic bool
 }
 
-func newTypeGatherer(builtins parse.TypeMap) *typeGatherer {
+func newTypeGatherer(fileURI string, builtins parse.TypeMap) *typeGatherer {
 	return &typeGatherer{
-		scopeTracker: parse.NewScopeTracker(),
-		builtins:     builtins,
-		types:        make(parse.TypeMap),
-		isFirstPass:  true,
-		defUsages:    NewDefinitionsUsagesLookup(),
+		BaseJavaParserListener: javaparser.BaseJavaParserListener{},
+		scopeTracker:           parse.NewScopeTracker(),
+		builtins:               builtins,
+		types:                  make(parse.TypeMap),
+		defUsages:              NewDefinitionsUsagesLookup(),
+		currFileURI:            fileURI,
+		currPackageName:        "",
+		isFirstPass:            true,
+		currentMemberIsStatic:  false,
 	}
 }
 
@@ -151,7 +156,12 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 				Name:       varDecl.GetText(),
 				Type:       fieldType,
 				ParentType: currType,
+				Definition: nil,
+				Usages:     []parse.CodeLocation{},
+				Visibility: 0,
 				IsStatic:   tg.currentMemberIsStatic,
+				// TODO real value for IsFinal
+				IsFinal: false,
 			}
 
 			currType.Fields = append(currType.Fields, field)
@@ -235,7 +245,14 @@ func (tg *typeGatherer) addNewConstructorFromScope(ctx formalParametersCtx) {
 	currType := tg.types[currTypeName]
 
 	newConstructor := &parse.JavaConstructor{
-		Params: tg.getArgsFromContext(ctx),
+		ParentType: currType,
+		Params:     tg.getArgsFromContext(ctx),
+		Definition: &parse.CodeLocation{
+			FileUri: tg.currFileURI,
+			Loc:     parse.ParserRuleContextToBounds(ctx.(antlr.ParserRuleContext)),
+		},
+		Usages:     []parse.CodeLocation{},
+		Visibility: 0,
 	}
 
 	currType.Constructors = append(currType.Constructors, newConstructor)
@@ -248,8 +265,15 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx)
 
 	method := &parse.JavaMethod{
 		Name:       scope.Name,
+		ParentType: currType,
 		ReturnType: nil,
 		Params:     nil,
+		Definition: &parse.CodeLocation{
+			FileUri: tg.currFileURI,
+			Loc:     parse.ParserRuleContextToBounds(ctx.(antlr.ParserRuleContext)),
+		},
+		Usages:     []parse.CodeLocation{},
+		Visibility: 0,
 		IsStatic:   false,
 	}
 
@@ -273,8 +297,9 @@ func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*parse.Jav
 	if receiverParameterCtx != nil {
 		receiverParameter := receiverParameterCtx.(*javaparser.ReceiverParameterContext)
 		arg := &parse.JavaParameter{
-			Name: "this",
-			Type: tg.lookupType(receiverParameter.TypeType().GetText()),
+			Name:      "this",
+			Type:      tg.lookupType(receiverParameter.TypeType().GetText()),
+			IsVarargs: false,
 		}
 		args = append(args, arg)
 	}
@@ -286,8 +311,9 @@ func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*parse.Jav
 		for _, argICtx := range paramList.AllFormalParameter() {
 			argCtx := argICtx.(*javaparser.FormalParameterContext)
 			arg := &parse.JavaParameter{
-				Name: argCtx.VariableDeclaratorId().GetText(),
-				Type: tg.lookupType(argCtx.TypeType().GetText()),
+				Name:      argCtx.VariableDeclaratorId().GetText(),
+				Type:      tg.lookupType(argCtx.TypeType().GetText()),
+				IsVarargs: false,
 			}
 			args = append(args, arg)
 		}

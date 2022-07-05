@@ -21,7 +21,7 @@ func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
 	objType := &parse.JavaType{Name: "Object"}
 	builtins := parse.TypeMap{"String": strType, "Object": objType}
 	parse.AddPrimitiveTypes(builtins)
-	userTypes := GatherTypes(tree, builtins)
+	userTypes := GatherTypes("testfile", tree, builtins)
 
 	return CheckTypes(zaptest.NewLogger(t), tree, "type_checker_test", userTypes, builtins)
 }

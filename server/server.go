@@ -3,10 +3,11 @@ package server
 import (
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
 	"java-mini-ls-go/parse"
 	"java-mini-ls-go/parse/typecheck"
 	"java-mini-ls-go/util"
+
+	"github.com/pkg/errors"
 
 	"go.lsp.dev/jsonrpc2"
 	"go.lsp.dev/protocol"
@@ -38,12 +39,14 @@ func NewServer(ctx context.Context, logger *zap.Logger) *JavaLS {
 	return &JavaLS{
 		ctx:                  ctx,
 		log:                  logger,
+		client:               nil,
 		documentTextCache:    util.NewSyncMap[string, protocol.TextDocumentItem](),
 		symbols:              util.NewSyncMap[string, []*parse.CodeSymbol](),
 		scopes:               util.NewSyncMap[string, typecheck.TypeCheckingScope](),
 		defUsages:            util.NewSyncMap[string, *typecheck.DefinitionsUsagesLookup](),
 		builtinTypes:         make(map[string]*parse.JavaType),
 		diagnosticsPublisher: &RealDiagnosticsPublisher{},
+		ReadStdlibTypes:      false,
 	}
 }
 
@@ -57,6 +60,7 @@ func RunServer(ctx context.Context, logger *zap.Logger, stream jsonrpc2.Stream) 
 	return ctx, conn, client
 }
 
+//nolint:exhaustruct
 func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams) (*protocol.InitializeResult, error) {
 	j.log.Info("Initialize")
 
@@ -82,6 +86,7 @@ func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams
 			DocumentSymbolProvider: true,
 			HoverProvider:          true,
 		},
+		ServerInfo: nil,
 	}, nil
 }
 
@@ -107,10 +112,10 @@ func (j *JavaLS) DidOpen(_ context.Context, params *protocol.DidOpenTextDocument
 func (j *JavaLS) DidChange(_ context.Context, params *protocol.DidChangeTextDocumentParams) error {
 	j.log.Info(fmt.Sprintf("DidChange %s", params.TextDocument.URI))
 	item := protocol.TextDocumentItem{
-		URI:     params.TextDocument.URI,
-		Version: params.TextDocument.Version,
-		Text:    params.ContentChanges[0].Text,
-		// NOTE: language ID not set here
+		URI:        params.TextDocument.URI,
+		Version:    params.TextDocument.Version,
+		Text:       params.ContentChanges[0].Text,
+		LanguageID: "java",
 	}
 	j.parseTextDocument(item)
 	return nil
@@ -125,7 +130,7 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	symbols := parse.FindSymbols(parsed)
 	j.symbols.Set(uriString, symbols)
 
-	userTypes := typecheck.GatherTypes(parsed, j.builtinTypes)
+	userTypes := typecheck.GatherTypes(uriString, parsed, j.builtinTypes)
 	typeCheckingResult := typecheck.CheckTypes(j.log, parsed, uriString, userTypes, j.builtinTypes)
 	j.scopes.Set(uriString, typeCheckingResult.RootScope)
 	j.defUsages.Set(uriString, typeCheckingResult.DefUsagesLookup)
@@ -160,6 +165,8 @@ func convertToDocumentSymbols(codeSymbols []*parse.CodeSymbol) []protocol.Docume
 			Name:           s.Name,
 			Detail:         s.Detail,
 			Kind:           symbolTypeMap[s.Type],
+			Tags:           nil,
+			Deprecated:     false,
 			Range:          rrange,
 			SelectionRange: rrange,
 			Children:       convertToDocumentSymbols(s.Children),
@@ -201,10 +208,13 @@ func (j *JavaLS) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 		})
 		if symbol != nil {
 			// For now just return the variable name + type
-			return &protocol.Hover{Contents: protocol.MarkupContent{
-				Kind:  protocol.Markdown,
-				Value: fmt.Sprintf("**%s** %s", symbol.ShortName(), symbol.FullName()),
-			}}, nil
+			return &protocol.Hover{
+				Contents: protocol.MarkupContent{
+					Kind:  protocol.Markdown,
+					Value: fmt.Sprintf("**%s** %s", symbol.ShortName(), symbol.FullName()),
+				},
+				Range: nil,
+			}, nil
 		}
 	}
 
