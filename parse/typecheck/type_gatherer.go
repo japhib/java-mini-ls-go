@@ -142,6 +142,10 @@ func (tg *typeGatherer) ExitClassBodyDeclaration(ctx *javaparser.ClassBodyDeclar
 
 // EnterFieldDeclaration is called when production fieldDeclaration is entered.
 func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationContext) {
+	if tg.isFirstPass {
+		return
+	}
+
 	currTypeName := tg.scopeTracker.ScopeStack.Top().Name
 	currType := tg.types[currTypeName]
 
@@ -152,8 +156,9 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 	if varDeclsI != nil {
 		varDecls := varDeclsI.(*javaparser.VariableDeclaratorsContext)
 		for _, varDecl := range varDecls.AllVariableDeclarator() {
+			fieldName := varDecl.GetText()
 			field := &parse.JavaField{
-				Name:       varDecl.GetText(),
+				Name:       fieldName,
 				Type:       fieldType,
 				ParentType: currType,
 				Definition: nil,

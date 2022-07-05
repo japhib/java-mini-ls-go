@@ -406,7 +406,7 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 	enclosing := tc.getEnclosingType()
 	field := enclosing.LookupField(identName)
 	if field != nil {
-		tc.pushExprType(field.ParentType, bounds)
+		tc.pushExprType(field.Type, bounds)
 		return
 	}
 

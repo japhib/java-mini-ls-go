@@ -6,6 +6,39 @@ import (
 	"testing"
 )
 
+func stripOutStuffWeDontWannaTest(types parse.TypeMap) {
+	nilOutCircularRefs(types)
+	stripAllsDefsUsages(types)
+}
+
+func stripAllsDefsUsages(types parse.TypeMap) {
+	for _, ttype := range types {
+		stripDefsUsages(ttype)
+	}
+}
+
+func stripDefsUsages(ttype *parse.JavaType) {
+	// TODO test this stuff when the location stuff is more accurate
+
+	ttype.Definition = nil
+	ttype.Usages = nil
+
+	for _, c := range ttype.Constructors {
+		c.Definition = nil
+		c.Usages = nil
+	}
+
+	for _, m := range ttype.Methods {
+		m.Definition = nil
+		m.Usages = nil
+	}
+
+	for _, f := range ttype.Fields {
+		f.Definition = nil
+		f.Usages = nil
+	}
+}
+
 func TestGatherTypes_Basic(t *testing.T) {
 	tree, errors := parse.Parse(`
 package stuff;
@@ -40,6 +73,7 @@ public class Main {
 	}
 
 	types := GatherTypes("testfile", tree, builtins)
+	stripOutStuffWeDontWannaTest(types)
 
 	expectedTypes := parse.TypeMap{
 		"Main": {
@@ -64,7 +98,6 @@ public class Main {
 			Type:         parse.JavaTypeClass,
 			Extends:      []*parse.JavaType{},
 			Implements:   []*parse.JavaType{},
-			Usages:       []parse.CodeLocation{},
 			Visibility:   parse.VisibilityPublic,
 		},
 	}
@@ -95,10 +128,12 @@ class MyClass {
 	assert.Equal(t, 0, len(errors))
 
 	strType := &parse.JavaType{
-		Name: "String",
+		Name:       "String",
+		Visibility: parse.VisibilityPublic,
 	}
 	intType := &parse.JavaType{
-		Name: "int",
+		Name:       "int",
+		Visibility: parse.VisibilityPublic,
 	}
 
 	builtins := parse.TypeMap{
@@ -107,21 +142,22 @@ class MyClass {
 	}
 
 	types := GatherTypes("testfile", tree, builtins)
-	nilOutCircularRefs(types)
+	stripOutStuffWeDontWannaTest(types)
 
 	nestedType := &parse.JavaType{
 		Name: "Nested",
 		Type: parse.JavaTypeClass,
 		Fields: []*parse.JavaField{
 			{
-				Name:       "nestedInt",
-				ParentType: intType,
+				Name: "nestedInt",
+				Type: intType,
 			},
 		},
 		Constructors: []*parse.JavaConstructor{},
 		Methods:      []*parse.JavaMethod{},
 		Extends:      []*parse.JavaType{},
 		Implements:   []*parse.JavaType{},
+		Visibility:   parse.VisibilityPublic,
 	}
 
 	expectedTypes := parse.TypeMap{
@@ -161,6 +197,7 @@ class MyClass {
 			Type:       parse.JavaTypeClass,
 			Extends:    []*parse.JavaType{},
 			Implements: []*parse.JavaType{},
+			Visibility: parse.VisibilityPublic,
 		},
 		"Nested": nestedType,
 	}
@@ -204,6 +241,7 @@ enum MyEnum {
 	strType := &parse.JavaType{Name: "String"}
 	builtins := parse.TypeMap{"String": strType}
 	types := GatherTypes("testfile", tree, builtins)
+	stripOutStuffWeDontWannaTest(types)
 
 	expectedTypes := parse.TypeMap{
 		"MyEnum": &parse.JavaType{
@@ -221,8 +259,8 @@ enum MyEnum {
 			},
 			Fields: []*parse.JavaField{
 				{
-					Name:       "value",
-					ParentType: strType,
+					Name: "value",
+					Type: strType,
 				},
 			},
 			Methods: []*parse.JavaMethod{
@@ -232,6 +270,9 @@ enum MyEnum {
 					Params:     []*parse.JavaParameter{},
 				},
 			},
+			Extends:    []*parse.JavaType{},
+			Implements: []*parse.JavaType{},
+			Visibility: parse.VisibilityPublic,
 		},
 	}
 
