@@ -241,7 +241,7 @@ func TestServer_Hover(t *testing.T) {
 	assert.Equal(t, &protocol.Hover{
 		Contents: protocol.MarkupContent{
 			Kind:  protocol.Markdown,
-			Value: "**thing** java.Main.main(String[] args):.Thing:thing",
+			Value: "**thing** Thing thing (local var in void java.Main.main(String[] args))",
 		},
 		Range: nil,
 	}, result)

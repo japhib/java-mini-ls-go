@@ -26,6 +26,7 @@ func GatherTypes(fileURI string, tree antlr.Tree, builtins typ.TypeMap) (typ.Typ
 }
 
 type formalParametersCtx interface {
+	Identifier() javaparser.IIdentifierContext
 	FormalParameters() javaparser.IFormalParametersContext
 }
 
@@ -182,7 +183,7 @@ func (tg *typeGatherer) addNewTypeFromScope(scope *parse.Scope, ttype typ.JavaTy
 		Loc:     scope.Bounds,
 	})
 	tg.types[scope.Name] = newType
-	tg.defUsages.NewSymbol(scope.Bounds, newType)
+	tg.defUsages.AddNewSymbol(scope.Bounds, newType)
 }
 
 func (tg *typeGatherer) checkScopeExtendsImplements(scope *parse.Scope, ctx antlr.ParserRuleContext) {
@@ -254,24 +255,30 @@ func (tg *typeGatherer) addNewConstructorFromScope(ctx formalParametersCtx) {
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
 	currType := tg.types[currTypeName]
 
+	bounds := loc.ParserRuleContextToBounds(ctx.Identifier())
+
 	newConstructor := &typ.JavaConstructor{
 		ParentType: currType,
 		Params:     tg.getArgsFromContext(ctx),
 		Definition: &loc.CodeLocation{
 			FileUri: tg.currFileURI,
-			Loc:     loc.ParserRuleContextToBounds(ctx.(antlr.ParserRuleContext)),
+			Loc:     bounds,
 		},
 		Usages:     []loc.CodeLocation{},
 		Visibility: 0,
 	}
 
 	currType.Constructors = append(currType.Constructors, newConstructor)
+
+	tg.defUsages.AddNewSymbol(bounds, newConstructor)
 }
 
 func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx) {
 	// The top is the current scope, so we use top minus 1 to get the enclosing class
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
 	currType := tg.types[currTypeName]
+
+	bounds := loc.ParserRuleContextToBounds(ctx.Identifier())
 
 	method := &typ.JavaMethod{
 		Name:       scope.Name,
@@ -280,7 +287,7 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx)
 		Params:     nil,
 		Definition: &loc.CodeLocation{
 			FileUri: tg.currFileURI,
-			Loc:     loc.ParserRuleContextToBounds(ctx.(antlr.ParserRuleContext)),
+			Loc:     bounds,
 		},
 		Usages:     []loc.CodeLocation{},
 		Visibility: 0,
@@ -296,6 +303,8 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx)
 	method.IsStatic = tg.currentMemberIsStatic
 
 	currType.Methods = append(currType.Methods, method)
+
+	tg.defUsages.AddNewSymbol(bounds, method)
 }
 
 func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*typ.JavaParameter {

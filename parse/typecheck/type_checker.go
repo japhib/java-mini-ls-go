@@ -182,7 +182,7 @@ func (tc *typeChecker) checkAndAddVariable(name string, ttype *typ.JavaType, bou
 			Loc:     bounds,
 		})
 		topScope.addLocal(local)
-		tc.defUsages.NewSymbol(bounds, local)
+		tc.defUsages.AddNewSymbol(bounds, local)
 	}
 }
 
@@ -408,6 +408,10 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 	topTypeScope := tc.currentScope
 	ident, ok := topTypeScope.Locals[identName]
 	if ok {
+		ident.Usages = append(ident.Usages, loc.CodeLocation{
+			FileUri: tc.currFileURI,
+			Loc:     bounds,
+		})
 		tc.pushExprType(ident.Type, bounds)
 		return
 	}
@@ -415,6 +419,10 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 	enclosing := tc.getEnclosingType()
 	field := enclosing.LookupField(identName)
 	if field != nil {
+		field.Usages = append(field.Usages, loc.CodeLocation{
+			FileUri: tc.currFileURI,
+			Loc:     bounds,
+		})
 		tc.pushExprType(field.Type, bounds)
 		return
 	}

@@ -203,3 +203,34 @@ public class MainClass {
 	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
 }
+
+func TestCheckTypes_LocalVarUsage(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+public class MainClass {
+	public void add() {
+		var a = "hi";
+		String b = a;
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{}, typeErrors)
+
+	defUsages := typeCheckResult.DefUsagesLookup
+
+	assertSymbol := func(line, col int, kind typ.JavaSymbolKind, name string) {
+		result := defUsages.Lookup(loc.FileLocation{
+			Line:   line,
+			Column: col,
+		})
+		assert.NotNilf(t, result, "Nil result for lookup at %d:%d", line, col)
+		if result != nil {
+			assert.Equal(t, kind, result.Kind(), "Wrong type for lookup at %d:%d", line, col)
+			assert.Equal(t, name, result.ShortName(), "Wrong ShortName for lookup at %d:%d", line, col)
+		}
+	}
+
+	assertSymbol(2, 18, typ.JavaSymbolType, "MainClass")
+	assertSymbol(3, 13, typ.JavaSymbolMethod, "add()")
+	assertSymbol(4, 6, typ.JavaSymbolLocal, "a")
+	assertSymbol(5, 9, typ.JavaSymbolLocal, "b")
+}

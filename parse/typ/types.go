@@ -411,11 +411,22 @@ func (jm *JavaMethod) PackageName() string {
 }
 
 func (jm *JavaMethod) ShortName() string {
+	return jm.Name
+}
+
+func (jm *JavaMethod) NameWithArgs() string {
 	return fmt.Sprintf("%s(%s)", jm.Name, strings.Join(util.MapToString(jm.Params), ","))
 }
 
 func (jm *JavaMethod) FullName() string {
-	return fmt.Sprintf("%s.%s", jm.ParentType.FullName(), jm.ShortName())
+	var returnTypeName string
+	if jm.ReturnType == nil {
+		returnTypeName = "void"
+	} else {
+		returnTypeName = jm.ReturnType.ShortName()
+	}
+
+	return fmt.Sprintf("%s %s.%s", returnTypeName, jm.ParentType.FullName(), jm.NameWithArgs())
 }
 
 func (jm *JavaMethod) GetVisibility() VisibilityType {
@@ -445,8 +456,8 @@ type JavaParameter struct {
 	IsVarargs bool
 }
 
-func (ja *JavaParameter) String() string {
-	return fmt.Sprintf("%s %s", ja.Type.Name, ja.Name)
+func (jp *JavaParameter) String() string {
+	return fmt.Sprintf("%s %s", jp.Type.Name, jp.Name)
 }
 
 type JavaLocal struct {
@@ -485,7 +496,7 @@ func (jl *JavaLocal) ShortName() string {
 }
 
 func (jl *JavaLocal) FullName() string {
-	return fmt.Sprintf("%s %s (in %s)", jl.Type.FullName(), jl.Name, jl.ParentMethod.FullName())
+	return fmt.Sprintf("%s %s (local var in %s)", jl.Type.FullName(), jl.Name, jl.ParentMethod.FullName())
 }
 
 func (jl *JavaLocal) GetVisibility() VisibilityType {

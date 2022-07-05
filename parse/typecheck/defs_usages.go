@@ -37,7 +37,7 @@ func (dul *DefinitionsUsagesLookup) GetLine(line int) SymbolsOnLine {
 	return dul.DefUsagesByLine[line]
 }
 
-func (dul *DefinitionsUsagesLookup) NewSymbol(loc loc.Bounds, symbolToAdd typ.JavaSymbol) {
+func (dul *DefinitionsUsagesLookup) AddNewSymbol(loc loc.Bounds, symbolToAdd typ.JavaSymbol) {
 	lineNumber := loc.Start.Line
 	line := dul.DefUsagesByLine[lineNumber]
 
