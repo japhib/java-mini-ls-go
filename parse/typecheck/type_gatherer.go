@@ -3,6 +3,8 @@ package typecheck
 import (
 	"java-mini-ls-go/javaparser"
 	"java-mini-ls-go/parse"
+	"java-mini-ls-go/parse/loc"
+	"java-mini-ls-go/parse/typ"
 	"java-mini-ls-go/util"
 
 	"github.com/antlr/antlr4/runtime/Go/antlr"
@@ -10,7 +12,7 @@ import (
 
 // GatherTypes traverses the given parse tree and gathers all class, method, field, etc. declarations.
 // TODO doesn't get visibility of any types.
-func GatherTypes(fileURI string, tree antlr.Tree, builtins parse.TypeMap) parse.TypeMap {
+func GatherTypes(fileURI string, tree antlr.Tree, builtins typ.TypeMap) typ.TypeMap {
 	visitor := newTypeGatherer(fileURI, builtins)
 
 	// First pass: just get types (no fields/methods yet, since those will reference the types)
@@ -35,8 +37,8 @@ type methodCtx interface {
 type typeGatherer struct {
 	javaparser.BaseJavaParserListener
 	scopeTracker          *parse.ScopeTracker
-	builtins              parse.TypeMap
-	types                 parse.TypeMap
+	builtins              typ.TypeMap
+	types                 typ.TypeMap
 	defUsages             *DefinitionsUsagesLookup
 	currFileURI           string
 	currPackageName       string
@@ -44,12 +46,12 @@ type typeGatherer struct {
 	currentMemberIsStatic bool
 }
 
-func newTypeGatherer(fileURI string, builtins parse.TypeMap) *typeGatherer {
+func newTypeGatherer(fileURI string, builtins typ.TypeMap) *typeGatherer {
 	return &typeGatherer{
 		BaseJavaParserListener: javaparser.BaseJavaParserListener{},
 		scopeTracker:           parse.NewScopeTracker(),
 		builtins:               builtins,
-		types:                  make(parse.TypeMap),
+		types:                  make(typ.TypeMap),
 		defUsages:              NewDefinitionsUsagesLookup(),
 		currFileURI:            fileURI,
 		currPackageName:        "",
@@ -78,15 +80,15 @@ func (tg *typeGatherer) EnterEveryRule(ctx antlr.ParserRuleContext) {
 func (tg *typeGatherer) handleNewScopeFirstPass(newScope *parse.Scope, _ antlr.ParserRuleContext) {
 	switch newScope.Type {
 	case parse.ScopeTypeClass:
-		tg.addNewTypeFromScope(newScope, parse.JavaTypeClass)
+		tg.addNewTypeFromScope(newScope, typ.JavaTypeClass)
 	case parse.ScopeTypeInterface:
-		tg.addNewTypeFromScope(newScope, parse.JavaTypeInterface)
+		tg.addNewTypeFromScope(newScope, typ.JavaTypeInterface)
 	case parse.ScopeTypeEnum:
-		tg.addNewTypeFromScope(newScope, parse.JavaTypeEnum)
+		tg.addNewTypeFromScope(newScope, typ.JavaTypeEnum)
 	case parse.ScopeTypeAnnotationType:
-		tg.addNewTypeFromScope(newScope, parse.JavaTypeAnnotation)
+		tg.addNewTypeFromScope(newScope, typ.JavaTypeAnnotation)
 	case parse.ScopeTypeRecord:
-		tg.addNewTypeFromScope(newScope, parse.JavaTypeRecord)
+		tg.addNewTypeFromScope(newScope, typ.JavaTypeRecord)
 	}
 }
 
@@ -157,12 +159,12 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 		varDecls := varDeclsI.(*javaparser.VariableDeclaratorsContext)
 		for _, varDecl := range varDecls.AllVariableDeclarator() {
 			fieldName := varDecl.GetText()
-			field := &parse.JavaField{
+			field := &typ.JavaField{
 				Name:       fieldName,
 				Type:       fieldType,
 				ParentType: currType,
 				Definition: nil,
-				Usages:     []parse.CodeLocation{},
+				Usages:     []loc.CodeLocation{},
 				Visibility: 0,
 				IsStatic:   tg.currentMemberIsStatic,
 				// TODO real value for IsFinal
@@ -174,8 +176,8 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 	}
 }
 
-func (tg *typeGatherer) addNewTypeFromScope(scope *parse.Scope, ttype parse.JavaTypeType) {
-	newType := parse.NewJavaType(scope.Name, tg.currPackageName, parse.VisibilityPublic, ttype)
+func (tg *typeGatherer) addNewTypeFromScope(scope *parse.Scope, ttype typ.JavaTypeType) {
+	newType := typ.NewJavaType(scope.Name, tg.currPackageName, typ.VisibilityPublic, ttype)
 	tg.types[scope.Name] = newType
 	tg.defUsages.NewSymbol(scope.Bounds, newType)
 }
@@ -187,7 +189,7 @@ func (tg *typeGatherer) checkScopeExtendsImplements(scope *parse.Scope, ctx antl
 	// TODO add existingType.Permits if it's relevant (new java 17 feature I think)
 }
 
-func (tg *typeGatherer) getExtendsTypes(ctx antlr.ParserRuleContext) []*parse.JavaType {
+func (tg *typeGatherer) getExtendsTypes(ctx antlr.ParserRuleContext) []*typ.JavaType {
 	typeTypes := []*javaparser.TypeTypeContext{}
 
 	switch tctx := ctx.(type) {
@@ -213,23 +215,23 @@ func (tg *typeGatherer) getExtendsTypes(ctx antlr.ParserRuleContext) []*parse.Ja
 		}
 	}
 
-	return util.Map(typeTypes, func(typeType *javaparser.TypeTypeContext) *parse.JavaType {
+	return util.Map(typeTypes, func(typeType *javaparser.TypeTypeContext) *typ.JavaType {
 		extendsTypeName := typeType.ClassOrInterfaceType().GetText()
 		return tg.lookupType(extendsTypeName)
 	})
 }
 
-func (tg *typeGatherer) getImplementsTypes(ctx antlr.ParserRuleContext) []*parse.JavaType {
+func (tg *typeGatherer) getImplementsTypes(ctx antlr.ParserRuleContext) []*typ.JavaType {
 	tctx, ok := ctx.(*javaparser.ClassDeclarationContext)
 	if !ok {
-		return []*parse.JavaType{}
+		return []*typ.JavaType{}
 	}
 
 	implementsI := tctx.ClassDeclarationImplements()
 	if implementsI != nil {
 		typeList := implementsI.(*javaparser.ClassDeclarationImplementsContext).TypeList().(*javaparser.TypeListContext)
 
-		implTypes := []*parse.JavaType{}
+		implTypes := []*typ.JavaType{}
 		allTypeTypes := typeList.AllTypeType()
 		for _, tt := range allTypeTypes {
 			if tt != nil {
@@ -241,7 +243,7 @@ func (tg *typeGatherer) getImplementsTypes(ctx antlr.ParserRuleContext) []*parse
 		return implTypes
 	}
 
-	return []*parse.JavaType{}
+	return []*typ.JavaType{}
 }
 
 func (tg *typeGatherer) addNewConstructorFromScope(ctx formalParametersCtx) {
@@ -249,14 +251,14 @@ func (tg *typeGatherer) addNewConstructorFromScope(ctx formalParametersCtx) {
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
 	currType := tg.types[currTypeName]
 
-	newConstructor := &parse.JavaConstructor{
+	newConstructor := &typ.JavaConstructor{
 		ParentType: currType,
 		Params:     tg.getArgsFromContext(ctx),
-		Definition: &parse.CodeLocation{
+		Definition: &loc.CodeLocation{
 			FileUri: tg.currFileURI,
-			Loc:     parse.ParserRuleContextToBounds(ctx.(antlr.ParserRuleContext)),
+			Loc:     loc.ParserRuleContextToBounds(ctx.(antlr.ParserRuleContext)),
 		},
-		Usages:     []parse.CodeLocation{},
+		Usages:     []loc.CodeLocation{},
 		Visibility: 0,
 	}
 
@@ -268,16 +270,16 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx)
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
 	currType := tg.types[currTypeName]
 
-	method := &parse.JavaMethod{
+	method := &typ.JavaMethod{
 		Name:       scope.Name,
 		ParentType: currType,
 		ReturnType: nil,
 		Params:     nil,
-		Definition: &parse.CodeLocation{
+		Definition: &loc.CodeLocation{
 			FileUri: tg.currFileURI,
-			Loc:     parse.ParserRuleContextToBounds(ctx.(antlr.ParserRuleContext)),
+			Loc:     loc.ParserRuleContextToBounds(ctx.(antlr.ParserRuleContext)),
 		},
-		Usages:     []parse.CodeLocation{},
+		Usages:     []loc.CodeLocation{},
 		Visibility: 0,
 		IsStatic:   false,
 	}
@@ -293,15 +295,15 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx)
 	currType.Methods = append(currType.Methods, method)
 }
 
-func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*parse.JavaParameter {
-	args := make([]*parse.JavaParameter, 0)
+func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*typ.JavaParameter {
+	args := make([]*typ.JavaParameter, 0)
 
 	argsCtx := ctx.FormalParameters().(*javaparser.FormalParametersContext)
 
 	receiverParameterCtx := argsCtx.ReceiverParameter()
 	if receiverParameterCtx != nil {
 		receiverParameter := receiverParameterCtx.(*javaparser.ReceiverParameterContext)
-		arg := &parse.JavaParameter{
+		arg := &typ.JavaParameter{
 			Name:      "this",
 			Type:      tg.lookupType(receiverParameter.TypeType().GetText()),
 			IsVarargs: false,
@@ -315,7 +317,7 @@ func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*parse.Jav
 		paramList := paramListI.(*javaparser.FormalParameterListContext)
 		for _, argICtx := range paramList.AllFormalParameter() {
 			argCtx := argICtx.(*javaparser.FormalParameterContext)
-			arg := &parse.JavaParameter{
+			arg := &typ.JavaParameter{
 				Name:      argCtx.VariableDeclaratorId().GetText(),
 				Type:      tg.lookupType(argCtx.TypeType().GetText()),
 				IsVarargs: false,
@@ -326,7 +328,7 @@ func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*parse.Jav
 		lastParamI := paramList.LastFormalParameter()
 		if lastParamI != nil {
 			lastParam := lastParamI.(*javaparser.LastFormalParameterContext)
-			arg := &parse.JavaParameter{
+			arg := &typ.JavaParameter{
 				Name:      lastParam.VariableDeclaratorId().GetText(),
 				Type:      tg.lookupType(lastParam.TypeType().GetText()),
 				IsVarargs: lastParam.ELLIPSIS() != nil,
@@ -338,7 +340,7 @@ func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*parse.Jav
 	return args
 }
 
-func (tg *typeGatherer) lookupType(typeName string) *parse.JavaType {
+func (tg *typeGatherer) lookupType(typeName string) *typ.JavaType {
 	userType, ok := tg.types[typeName]
 	if ok {
 		return userType

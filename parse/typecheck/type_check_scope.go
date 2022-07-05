@@ -1,19 +1,22 @@
 package typecheck
 
-import "java-mini-ls-go/parse"
+import (
+	"java-mini-ls-go/parse/loc"
+	"java-mini-ls-go/parse/typ"
+)
 
 type TypeCheckingScope struct {
-	Symbol   parse.JavaSymbol
-	Locals   map[string]*parse.JavaLocal
-	Location parse.Bounds
+	Symbol   typ.JavaSymbol
+	Locals   map[string]*typ.JavaLocal
+	Location loc.Bounds
 	Parent   *TypeCheckingScope
 	Children []TypeCheckingScope
 }
 
-func newTypeCheckingScope(symbol parse.JavaSymbol, parent *TypeCheckingScope, bounds parse.Bounds) TypeCheckingScope {
+func newTypeCheckingScope(symbol typ.JavaSymbol, parent *TypeCheckingScope, bounds loc.Bounds) TypeCheckingScope {
 	newScope := TypeCheckingScope{
 		Symbol:   symbol,
-		Locals:   make(map[string]*parse.JavaLocal),
+		Locals:   make(map[string]*typ.JavaLocal),
 		Location: bounds,
 		Parent:   parent,
 		Children: []TypeCheckingScope{},
@@ -27,11 +30,11 @@ func newTypeCheckingScope(symbol parse.JavaSymbol, parent *TypeCheckingScope, bo
 	return newScope
 }
 
-func (tcs *TypeCheckingScope) addLocal(local *parse.JavaLocal) {
+func (tcs *TypeCheckingScope) addLocal(local *typ.JavaLocal) {
 	tcs.Locals[local.Name] = local
 }
 
-func (tcs *TypeCheckingScope) Contains(location parse.FileLocation) bool {
+func (tcs *TypeCheckingScope) Contains(location loc.FileLocation) bool {
 	withinLines := location.Line >= tcs.Location.Start.Line && location.Line <= tcs.Location.End.Line
 	if !withinLines {
 		return false
@@ -56,7 +59,7 @@ func (tcs *TypeCheckingScope) Contains(location parse.FileLocation) bool {
 	return true
 }
 
-func (tcs *TypeCheckingScope) LookupScopeFor(location parse.FileLocation) *TypeCheckingScope {
+func (tcs *TypeCheckingScope) LookupScopeFor(location loc.FileLocation) *TypeCheckingScope {
 	for _, childScope := range tcs.Children {
 		// If any of the children match, recurse into that child.
 		// This way we find the narrowest scope that matches a given code location.

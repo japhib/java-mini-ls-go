@@ -3,21 +3,22 @@ package typecheck
 import (
 	"github.com/stretchr/testify/assert"
 	"java-mini-ls-go/parse"
+	"java-mini-ls-go/parse/typ"
 	"testing"
 )
 
-func stripOutStuffWeDontWannaTest(types parse.TypeMap) {
+func stripOutStuffWeDontWannaTest(types typ.TypeMap) {
 	nilOutCircularRefs(types)
 	stripAllsDefsUsages(types)
 }
 
-func stripAllsDefsUsages(types parse.TypeMap) {
+func stripAllsDefsUsages(types typ.TypeMap) {
 	for _, ttype := range types {
 		stripDefsUsages(ttype)
 	}
 }
 
-func stripDefsUsages(ttype *parse.JavaType) {
+func stripDefsUsages(ttype *typ.JavaType) {
 	// TODO test this stuff when the location stuff is more accurate
 
 	ttype.Definition = nil
@@ -64,27 +65,27 @@ public class Main {
 }`)
 	assert.Equal(t, 0, len(errors))
 
-	strType := &parse.JavaType{
+	strType := &typ.JavaType{
 		Name: "String",
 	}
 
-	builtins := parse.TypeMap{
+	builtins := typ.TypeMap{
 		"String": strType,
 	}
 
 	types := GatherTypes("testfile", tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
 
-	expectedTypes := parse.TypeMap{
+	expectedTypes := typ.TypeMap{
 		"Main": {
 			Name:    "Main",
 			Package: "stuff",
-			Methods: []*parse.JavaMethod{
+			Methods: []*typ.JavaMethod{
 				{
 					Name: "main",
 					// void -> nil
 					ReturnType: nil,
-					Params: []*parse.JavaParameter{
+					Params: []*typ.JavaParameter{
 						{
 							Name:      "args",
 							Type:      strType,
@@ -93,12 +94,12 @@ public class Main {
 					},
 				},
 			},
-			Constructors: []*parse.JavaConstructor{},
-			Fields:       []*parse.JavaField{},
-			Type:         parse.JavaTypeClass,
-			Extends:      []*parse.JavaType{},
-			Implements:   []*parse.JavaType{},
-			Visibility:   parse.VisibilityPublic,
+			Constructors: []*typ.JavaConstructor{},
+			Fields:       []*typ.JavaField{},
+			Type:         typ.JavaTypeClass,
+			Extends:      []*typ.JavaType{},
+			Implements:   []*typ.JavaType{},
+			Visibility:   typ.VisibilityPublic,
 		},
 	}
 
@@ -127,16 +128,16 @@ class MyClass {
 }`)
 	assert.Equal(t, 0, len(errors))
 
-	strType := &parse.JavaType{
+	strType := &typ.JavaType{
 		Name:       "String",
-		Visibility: parse.VisibilityPublic,
+		Visibility: typ.VisibilityPublic,
 	}
-	intType := &parse.JavaType{
+	intType := &typ.JavaType{
 		Name:       "int",
-		Visibility: parse.VisibilityPublic,
+		Visibility: typ.VisibilityPublic,
 	}
 
-	builtins := parse.TypeMap{
+	builtins := typ.TypeMap{
 		"String": strType,
 		"int":    intType,
 	}
@@ -144,26 +145,26 @@ class MyClass {
 	types := GatherTypes("testfile", tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
 
-	nestedType := &parse.JavaType{
+	nestedType := &typ.JavaType{
 		Name: "Nested",
-		Type: parse.JavaTypeClass,
-		Fields: []*parse.JavaField{
+		Type: typ.JavaTypeClass,
+		Fields: []*typ.JavaField{
 			{
 				Name: "nestedInt",
 				Type: intType,
 			},
 		},
-		Constructors: []*parse.JavaConstructor{},
-		Methods:      []*parse.JavaMethod{},
-		Extends:      []*parse.JavaType{},
-		Implements:   []*parse.JavaType{},
-		Visibility:   parse.VisibilityPublic,
+		Constructors: []*typ.JavaConstructor{},
+		Methods:      []*typ.JavaMethod{},
+		Extends:      []*typ.JavaType{},
+		Implements:   []*typ.JavaType{},
+		Visibility:   typ.VisibilityPublic,
 	}
 
-	expectedTypes := parse.TypeMap{
+	expectedTypes := typ.TypeMap{
 		"MyClass": {
 			Name: "MyClass",
-			Fields: []*parse.JavaField{
+			Fields: []*typ.JavaField{
 				{
 					Name: "name",
 					Type: strType,
@@ -177,9 +178,9 @@ class MyClass {
 					Type: nestedType,
 				},
 			},
-			Constructors: []*parse.JavaConstructor{
+			Constructors: []*typ.JavaConstructor{
 				{
-					Params: []*parse.JavaParameter{
+					Params: []*typ.JavaParameter{
 						{
 							Name: "f",
 							Type: intType,
@@ -187,17 +188,17 @@ class MyClass {
 					},
 				},
 			},
-			Methods: []*parse.JavaMethod{
+			Methods: []*typ.JavaMethod{
 				{
 					Name:       "DoSomething",
 					ReturnType: intType,
-					Params:     []*parse.JavaParameter{},
+					Params:     []*typ.JavaParameter{},
 				},
 			},
-			Type:       parse.JavaTypeClass,
-			Extends:    []*parse.JavaType{},
-			Implements: []*parse.JavaType{},
-			Visibility: parse.VisibilityPublic,
+			Type:       typ.JavaTypeClass,
+			Extends:    []*typ.JavaType{},
+			Implements: []*typ.JavaType{},
+			Visibility: typ.VisibilityPublic,
 		},
 		"Nested": nestedType,
 	}
@@ -207,7 +208,7 @@ class MyClass {
 
 // nilOutCircularRefs sets backreferences (ParentType) inside a type to be nil
 // so that it's easier to test
-func nilOutCircularRefs(types parse.TypeMap) {
+func nilOutCircularRefs(types typ.TypeMap) {
 	for _, ttype := range types {
 		for _, constructor := range ttype.Constructors {
 			constructor.ParentType = nil
@@ -238,18 +239,18 @@ enum MyEnum {
 }`)
 	assert.Equal(t, 0, len(errors))
 
-	strType := &parse.JavaType{Name: "String"}
-	builtins := parse.TypeMap{"String": strType}
+	strType := &typ.JavaType{Name: "String"}
+	builtins := typ.TypeMap{"String": strType}
 	types := GatherTypes("testfile", tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
 
-	expectedTypes := parse.TypeMap{
-		"MyEnum": &parse.JavaType{
+	expectedTypes := typ.TypeMap{
+		"MyEnum": &typ.JavaType{
 			Name: "MyEnum",
-			Type: parse.JavaTypeEnum,
-			Constructors: []*parse.JavaConstructor{
+			Type: typ.JavaTypeEnum,
+			Constructors: []*typ.JavaConstructor{
 				{
-					Params: []*parse.JavaParameter{
+					Params: []*typ.JavaParameter{
 						{
 							Name: "v",
 							Type: strType,
@@ -257,22 +258,22 @@ enum MyEnum {
 					},
 				},
 			},
-			Fields: []*parse.JavaField{
+			Fields: []*typ.JavaField{
 				{
 					Name: "value",
 					Type: strType,
 				},
 			},
-			Methods: []*parse.JavaMethod{
+			Methods: []*typ.JavaMethod{
 				{
 					Name:       "getValue",
 					ReturnType: strType,
-					Params:     []*parse.JavaParameter{},
+					Params:     []*typ.JavaParameter{},
 				},
 			},
-			Extends:    []*parse.JavaType{},
-			Implements: []*parse.JavaType{},
-			Visibility: parse.VisibilityPublic,
+			Extends:    []*typ.JavaType{},
+			Implements: []*typ.JavaType{},
+			Visibility: typ.VisibilityPublic,
 		},
 	}
 

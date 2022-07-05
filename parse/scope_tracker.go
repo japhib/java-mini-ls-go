@@ -2,6 +2,7 @@ package parse
 
 import (
 	"java-mini-ls-go/javaparser"
+	"java-mini-ls-go/parse/loc"
 	"java-mini-ls-go/util"
 	"strings"
 
@@ -57,7 +58,7 @@ type Scope struct {
 	// Type is the type of the scope
 	Type ScopeType
 	// Bounds is the location in the code of this scope
-	Bounds Bounds
+	Bounds loc.Bounds
 	// Parent is the outer scope this one is nested under
 	Parent *Scope
 	// Children is a list of all scopes nested under this one
@@ -129,7 +130,7 @@ func (st *ScopeTracker) createScope(parent *Scope, ctx antlr.ParserRuleContext) 
 	ret := &Scope{
 		Name:     "",
 		Type:     ScopeTypeUnset,
-		Bounds:   ParserRuleContextToBounds(ctx),
+		Bounds:   loc.ParserRuleContextToBounds(ctx),
 		Parent:   parent,
 		Children: make([]*Scope, 0),
 	}

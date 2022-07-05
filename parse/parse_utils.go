@@ -2,6 +2,7 @@ package parse
 
 import (
 	"java-mini-ls-go/javaparser"
+	"java-mini-ls-go/parse/loc"
 
 	"go.lsp.dev/protocol"
 
@@ -44,14 +45,20 @@ func Parse(input string) (*javaparser.CompilationUnitContext, []SyntaxError) {
 }
 
 type SyntaxError struct {
-	Loc     FileLocation
+	Loc     loc.FileLocation
 	Token   string
 	Message string
 }
 
 func (se *SyntaxError) ToDiagnostic() protocol.Diagnostic {
 	return protocol.Diagnostic{
-		Range:              BoundsToRange(Bounds{Start: se.Loc, End: FileLocation{se.Loc.Line, se.Loc.Column + len(se.Token)}}),
+		Range: loc.BoundsToRange(loc.Bounds{
+			Start: se.Loc,
+			End: loc.FileLocation{
+				Line:   se.Loc.Line,
+				Column: se.Loc.Column + len(se.Token),
+			},
+		}),
 		Severity:           protocol.DiagnosticSeverityError,
 		Code:               nil,
 		CodeDescription:    nil,
@@ -72,7 +79,7 @@ var _ antlr.ErrorListener = (*errorListener)(nil)
 
 func (el *errorListener) SyntaxError(_ antlr.Recognizer, offendingSymbol interface{}, line, column int, msg string, _ antlr.RecognitionException) {
 	err := SyntaxError{
-		Loc:     FileLocation{line, column},
+		Loc:     loc.FileLocation{Line: line, Column: column},
 		Token:   offendingSymbol.(antlr.Token).GetText(),
 		Message: msg,
 	}

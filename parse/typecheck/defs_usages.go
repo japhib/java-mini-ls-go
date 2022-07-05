@@ -1,6 +1,9 @@
 package typecheck
 
-import "java-mini-ls-go/parse"
+import (
+	"java-mini-ls-go/parse/loc"
+	"java-mini-ls-go/parse/typ"
+)
 
 // SymbolWithLocation is a single definition or usage of a symbol.
 // Contains the location of the definition/usage, and a pointer to the symbol
@@ -8,8 +11,8 @@ import "java-mini-ls-go/parse"
 //
 // Note that it uses Bounds instead of CodeLocation since it only is for a single file.
 type SymbolWithLocation struct {
-	Loc    parse.Bounds
-	Symbol parse.JavaSymbol
+	Loc    loc.Bounds
+	Symbol typ.JavaSymbol
 }
 
 // SymbolsOnLine is a list of all the identifiers on a line of code in the editor,
@@ -34,7 +37,7 @@ func (dul *DefinitionsUsagesLookup) GetLine(line int) SymbolsOnLine {
 	return dul.DefUsagesByLine[line]
 }
 
-func (dul *DefinitionsUsagesLookup) NewSymbol(loc parse.Bounds, symbolToAdd parse.JavaSymbol) {
+func (dul *DefinitionsUsagesLookup) NewSymbol(loc loc.Bounds, symbolToAdd typ.JavaSymbol) {
 	lineNumber := loc.Start.Line
 	line := dul.DefUsagesByLine[lineNumber]
 
@@ -65,7 +68,7 @@ func (dul *DefinitionsUsagesLookup) NewSymbol(loc parse.Bounds, symbolToAdd pars
 
 // Lookup Given a file location, returns the most specific SymbolWithDefUsages instance corresponding
 // to that file location, if one exists.
-func (dul *DefinitionsUsagesLookup) Lookup(loc parse.FileLocation) parse.JavaSymbol {
+func (dul *DefinitionsUsagesLookup) Lookup(loc loc.FileLocation) typ.JavaSymbol {
 	line := dul.DefUsagesByLine[loc.Line]
 	if line == nil {
 		return nil

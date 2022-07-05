@@ -4,12 +4,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
 	"java-mini-ls-go/parse"
+	"java-mini-ls-go/parse/loc"
+	"java-mini-ls-go/parse/typ"
 	"testing"
 )
 
 func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
 	// Make sure to load built-in types
-	_, err := parse.LoadBuiltinTypes()
+	_, err := typ.LoadBuiltinTypes()
 	if err != nil {
 		t.Fatalf("Error loading builtin types: %s", err.Error())
 	}
@@ -17,10 +19,10 @@ func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
 	tree, parseErrors := parse.Parse(code)
 	assert.Equal(t, 0, len(parseErrors))
 
-	strType := &parse.JavaType{Name: "String"}
-	objType := &parse.JavaType{Name: "Object"}
-	builtins := parse.TypeMap{"String": strType, "Object": objType}
-	parse.AddPrimitiveTypes(builtins)
+	strType := &typ.JavaType{Name: "String"}
+	objType := &typ.JavaType{Name: "Object"}
+	builtins := typ.TypeMap{"String": strType, "Object": objType}
+	typ.AddPrimitiveTypes(builtins)
 	userTypes := GatherTypes("testfile", tree, builtins)
 
 	return CheckTypes(zaptest.NewLogger(t), tree, "type_checker_test", userTypes, builtins)
@@ -125,12 +127,12 @@ public class MainClass {
 	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{
 		{
-			Loc: parse.Bounds{
-				Start: parse.FileLocation{
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{
 					Line:   3,
 					Column: 16,
 				},
-				End: parse.FileLocation{
+				End: loc.FileLocation{
 					Line:   3,
 					Column: 16,
 				},
@@ -150,12 +152,12 @@ public class MainClass {
 	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{
 		{
-			Loc: parse.Bounds{
-				Start: parse.FileLocation{
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{
 					Line:   4,
 					Column: 22,
 				},
-				End: parse.FileLocation{
+				End: loc.FileLocation{
 					Line:   4,
 					Column: 22,
 				},
@@ -176,12 +178,12 @@ public class MainClass {
 	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{
 		{
-			Loc: parse.Bounds{
-				Start: parse.FileLocation{
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{
 					Line:   5,
 					Column: 6,
 				},
-				End: parse.FileLocation{
+				End: loc.FileLocation{
 					Line:   5,
 					Column: 6,
 				},

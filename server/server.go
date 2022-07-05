@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"java-mini-ls-go/parse"
+	"java-mini-ls-go/parse/loc"
+	"java-mini-ls-go/parse/symbol"
+	"java-mini-ls-go/parse/typ"
 	"java-mini-ls-go/parse/typecheck"
 	"java-mini-ls-go/util"
 
@@ -23,10 +26,10 @@ type JavaLS struct {
 	client protocol.Client
 
 	documentTextCache *util.SyncMap[string, protocol.TextDocumentItem]
-	symbols           *util.SyncMap[string, []*parse.CodeSymbol]
+	symbols           *util.SyncMap[string, []*symbol.CodeSymbol]
 	scopes            *util.SyncMap[string, typecheck.TypeCheckingScope]
 	defUsages         *util.SyncMap[string, *typecheck.DefinitionsUsagesLookup]
-	builtinTypes      map[string]*parse.JavaType
+	builtinTypes      map[string]*typ.JavaType
 
 	// Dependencies that can be mocked for testing
 	diagnosticsPublisher DiagnosticsPublisher
@@ -41,10 +44,10 @@ func NewServer(ctx context.Context, logger *zap.Logger) *JavaLS {
 		log:                  logger,
 		client:               nil,
 		documentTextCache:    util.NewSyncMap[string, protocol.TextDocumentItem](),
-		symbols:              util.NewSyncMap[string, []*parse.CodeSymbol](),
+		symbols:              util.NewSyncMap[string, []*symbol.CodeSymbol](),
 		scopes:               util.NewSyncMap[string, typecheck.TypeCheckingScope](),
 		defUsages:            util.NewSyncMap[string, *typecheck.DefinitionsUsagesLookup](),
-		builtinTypes:         make(map[string]*parse.JavaType),
+		builtinTypes:         make(map[string]*typ.JavaType),
 		diagnosticsPublisher: &RealDiagnosticsPublisher{},
 		ReadStdlibTypes:      false,
 	}
@@ -65,7 +68,7 @@ func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams
 	j.log.Info("Initialize")
 
 	var err error
-	j.builtinTypes, err = parse.LoadBuiltinTypes()
+	j.builtinTypes, err = typ.LoadBuiltinTypes()
 	if err != nil {
 		j.log.Error(err.Error())
 		return nil, err
@@ -127,7 +130,7 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 
 	parsed, syntaxErrors := parse.Parse(textDocument.Text)
 
-	symbols := parse.FindSymbols(parsed)
+	symbols := symbol.FindSymbols(parsed)
 	j.symbols.Set(uriString, symbols)
 
 	userTypes := typecheck.GatherTypes(uriString, parsed, j.builtinTypes)
@@ -144,23 +147,23 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	j.diagnosticsPublisher.PublishDiagnostics(j, textDocument, diagnostics)
 }
 
-var symbolTypeMap = map[parse.CodeSymbolType]protocol.SymbolKind{
-	parse.CodeSymbolClass:       protocol.SymbolKindClass,
-	parse.CodeSymbolConstant:    protocol.SymbolKindConstant,
-	parse.CodeSymbolConstructor: protocol.SymbolKindConstructor,
-	parse.CodeSymbolEnum:        protocol.SymbolKindEnum,
-	parse.CodeSymbolEnumMember:  protocol.SymbolKindEnumMember,
-	parse.CodeSymbolInterface:   protocol.SymbolKindInterface,
-	parse.CodeSymbolMethod:      protocol.SymbolKindMethod,
-	parse.CodeSymbolPackage:     protocol.SymbolKindPackage,
-	parse.CodeSymbolVariable:    protocol.SymbolKindVariable,
+var symbolTypeMap = map[symbol.CodeSymbolType]protocol.SymbolKind{
+	symbol.CodeSymbolClass:       protocol.SymbolKindClass,
+	symbol.CodeSymbolConstant:    protocol.SymbolKindConstant,
+	symbol.CodeSymbolConstructor: protocol.SymbolKindConstructor,
+	symbol.CodeSymbolEnum:        protocol.SymbolKindEnum,
+	symbol.CodeSymbolEnumMember:  protocol.SymbolKindEnumMember,
+	symbol.CodeSymbolInterface:   protocol.SymbolKindInterface,
+	symbol.CodeSymbolMethod:      protocol.SymbolKindMethod,
+	symbol.CodeSymbolPackage:     protocol.SymbolKindPackage,
+	symbol.CodeSymbolVariable:    protocol.SymbolKindVariable,
 }
 
-func convertToDocumentSymbols(codeSymbols []*parse.CodeSymbol) []protocol.DocumentSymbol {
+func convertToDocumentSymbols(codeSymbols []*symbol.CodeSymbol) []protocol.DocumentSymbol {
 	ret := make([]protocol.DocumentSymbol, 0, len(codeSymbols))
 
 	for _, s := range codeSymbols {
-		rrange := parse.BoundsToRange(s.Bounds)
+		rrange := loc.BoundsToRange(s.Bounds)
 		documentSymbol := protocol.DocumentSymbol{
 			Name:           s.Name,
 			Detail:         s.Detail,
@@ -202,7 +205,7 @@ func (j *JavaLS) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 	// Check if it's a local
 	lookup, ok := j.defUsages.Get(string(params.TextDocument.URI))
 	if ok {
-		symbol := lookup.Lookup(parse.FileLocation{
+		symbol := lookup.Lookup(loc.FileLocation{
 			Line:   int(params.Position.Line) + 1,
 			Column: int(params.Position.Character),
 		})

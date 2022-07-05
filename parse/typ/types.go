@@ -1,7 +1,8 @@
-package parse
+package typ
 
 import (
 	"fmt"
+	"java-mini-ls-go/parse/loc"
 	"java-mini-ls-go/util"
 	"strings"
 
@@ -38,10 +39,10 @@ type JavaSymbol interface {
 
 	// GetDefinition returns the location in code where this symbol is defined.
 	// May be nil for built-in or library types.
-	GetDefinition() *CodeLocation
+	GetDefinition() *loc.CodeLocation
 
 	// GetUsages returns a list of all usages of this symbol.
-	GetUsages() []CodeLocation
+	GetUsages() []loc.CodeLocation
 }
 
 type VisibilityType int
@@ -104,9 +105,9 @@ type JavaType struct {
 
 	// Definition stores where this symbol is defined in the code.
 	// Is nil for built-in/library types.
-	Definition *CodeLocation
+	Definition *loc.CodeLocation
 	// Usages stores all code locations where this type is referenced.
-	Usages []CodeLocation
+	Usages []loc.CodeLocation
 
 	Visibility VisibilityType
 	Type       JavaTypeType
@@ -123,7 +124,7 @@ func NewJavaType(name string, ppackage string, visibility VisibilityType, ttype 
 		Fields:       make([]*JavaField, 0),
 		Methods:      make([]*JavaMethod, 0),
 		Definition:   nil,
-		Usages:       make([]CodeLocation, 0),
+		Usages:       make([]loc.CodeLocation, 0),
 		Visibility:   visibility,
 		Type:         ttype,
 	}
@@ -156,11 +157,11 @@ func (jt *JavaType) GetVisibility() VisibilityType {
 	return jt.Visibility
 }
 
-func (jt *JavaType) GetDefinition() *CodeLocation {
+func (jt *JavaType) GetDefinition() *loc.CodeLocation {
 	return jt.Definition
 }
 
-func (jt *JavaType) GetUsages() []CodeLocation {
+func (jt *JavaType) GetUsages() []loc.CodeLocation {
 	return jt.Usages
 }
 
@@ -293,9 +294,9 @@ type JavaField struct {
 
 	// Definition stores where this symbol is defined in the code.
 	// Is nil for built-in/library types.
-	Definition *CodeLocation
+	Definition *loc.CodeLocation
 	// Usages stores all code locations where this type is referenced.
-	Usages []CodeLocation
+	Usages []loc.CodeLocation
 
 	Visibility VisibilityType
 	IsStatic   bool
@@ -324,11 +325,11 @@ func (jf *JavaField) GetVisibility() VisibilityType {
 	return jf.Visibility
 }
 
-func (jf *JavaField) GetDefinition() *CodeLocation {
+func (jf *JavaField) GetDefinition() *loc.CodeLocation {
 	return jf.Definition
 }
 
-func (jf *JavaField) GetUsages() []CodeLocation {
+func (jf *JavaField) GetUsages() []loc.CodeLocation {
 	return jf.Usages
 }
 
@@ -342,9 +343,9 @@ type JavaConstructor struct {
 
 	// Definition stores where this constructor is defined in the code.
 	// Is nil for built-in/library types.
-	Definition *CodeLocation
+	Definition *loc.CodeLocation
 	// Usages stores all code locations where this constructor is referenced.
-	Usages []CodeLocation
+	Usages []loc.CodeLocation
 
 	Visibility VisibilityType
 }
@@ -371,11 +372,11 @@ func (jc *JavaConstructor) GetVisibility() VisibilityType {
 	return jc.Visibility
 }
 
-func (jc *JavaConstructor) GetDefinition() *CodeLocation {
+func (jc *JavaConstructor) GetDefinition() *loc.CodeLocation {
 	return jc.Definition
 }
 
-func (jc *JavaConstructor) GetUsages() []CodeLocation {
+func (jc *JavaConstructor) GetUsages() []loc.CodeLocation {
 	return jc.Usages
 }
 
@@ -387,9 +388,9 @@ type JavaMethod struct {
 
 	// Definition stores where this method is defined in the code.
 	// Is nil for built-in/library types.
-	Definition *CodeLocation
+	Definition *loc.CodeLocation
 	// Usages stores all code locations where this method is referenced.
-	Usages []CodeLocation
+	Usages []loc.CodeLocation
 
 	Visibility VisibilityType
 	IsStatic   bool
@@ -417,11 +418,11 @@ func (jm *JavaMethod) GetVisibility() VisibilityType {
 	return jm.Visibility
 }
 
-func (jm *JavaMethod) GetDefinition() *CodeLocation {
+func (jm *JavaMethod) GetDefinition() *loc.CodeLocation {
 	return jm.Definition
 }
 
-func (jm *JavaMethod) GetUsages() []CodeLocation {
+func (jm *JavaMethod) GetUsages() []loc.CodeLocation {
 	return jm.Usages
 }
 
@@ -450,18 +451,18 @@ type JavaLocal struct {
 	ParentMethod *JavaMethod
 
 	// Definition stores where this method is defined in the code.
-	Definition *CodeLocation
+	Definition *loc.CodeLocation
 	// Usages stores all code locations where this method is referenced.
-	Usages []CodeLocation
+	Usages []loc.CodeLocation
 }
 
-func NewJavaLocal(name string, ttype *JavaType, parentMethod *JavaMethod, definition CodeLocation) *JavaLocal {
+func NewJavaLocal(name string, ttype *JavaType, parentMethod *JavaMethod, definition loc.CodeLocation) *JavaLocal {
 	return &JavaLocal{
 		Name:         name,
 		Type:         ttype,
 		ParentMethod: parentMethod,
 		Definition:   &definition,
-		Usages:       make([]CodeLocation, 0),
+		Usages:       make([]loc.CodeLocation, 0),
 	}
 }
 
@@ -487,10 +488,10 @@ func (jl *JavaLocal) GetVisibility() VisibilityType {
 	return VisibilityLocal
 }
 
-func (jl *JavaLocal) GetDefinition() *CodeLocation {
+func (jl *JavaLocal) GetDefinition() *loc.CodeLocation {
 	return jl.Definition
 }
 
-func (jl *JavaLocal) GetUsages() []CodeLocation {
+func (jl *JavaLocal) GetUsages() []loc.CodeLocation {
 	return jl.Usages
 }

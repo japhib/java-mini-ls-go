@@ -1,8 +1,10 @@
-package parse
+package symbol
 
 import (
 	"fmt"
 	"java-mini-ls-go/javaparser"
+	"java-mini-ls-go/parse"
+	"java-mini-ls-go/parse/loc"
 	"java-mini-ls-go/util"
 	"strings"
 
@@ -36,18 +38,18 @@ var CodeSymbolTypeNames = map[CodeSymbolType]string{
 	CodeSymbolVariable:    "Variable",
 }
 
-var ScopeTypesToCodeSymboltypes = map[ScopeType]CodeSymbolType{
-	ScopeTypeAnnotationType:         CodeSymbolClass,
-	ScopeTypeClass:                  CodeSymbolClass,
-	ScopeTypeConstructor:            CodeSymbolConstructor,
-	ScopeTypeEnum:                   CodeSymbolEnum,
-	ScopeTypeGenericConstructor:     CodeSymbolConstructor,
-	ScopeTypeGenericInterfaceMethod: CodeSymbolMethod,
-	ScopeTypeGenericMethod:          CodeSymbolMethod,
-	ScopeTypeInterface:              CodeSymbolInterface,
-	ScopeTypeInterfaceMethod:        CodeSymbolMethod,
-	ScopeTypeMethod:                 CodeSymbolMethod,
-	ScopeTypeRecord:                 CodeSymbolClass,
+var ScopeTypesToCodeSymboltypes = map[parse.ScopeType]CodeSymbolType{
+	parse.ScopeTypeAnnotationType:         CodeSymbolClass,
+	parse.ScopeTypeClass:                  CodeSymbolClass,
+	parse.ScopeTypeConstructor:            CodeSymbolConstructor,
+	parse.ScopeTypeEnum:                   CodeSymbolEnum,
+	parse.ScopeTypeGenericConstructor:     CodeSymbolConstructor,
+	parse.ScopeTypeGenericInterfaceMethod: CodeSymbolMethod,
+	parse.ScopeTypeGenericMethod:          CodeSymbolMethod,
+	parse.ScopeTypeInterface:              CodeSymbolInterface,
+	parse.ScopeTypeInterfaceMethod:        CodeSymbolMethod,
+	parse.ScopeTypeMethod:                 CodeSymbolMethod,
+	parse.ScopeTypeRecord:                 CodeSymbolClass,
 }
 
 // CodeSymbol represents a single symbol inside a source file, whether it's a class, a method, a field, a variable, etc.
@@ -59,7 +61,7 @@ type CodeSymbol struct {
 	// Detail is an optional detail about the symbol - method signature, field type/default value, etc.
 	Detail string
 	// Bounds is the location in the code of this symbol
-	Bounds Bounds
+	Bounds loc.Bounds
 	// Children is a list of all CodeSymbols nested under this one
 	Children []*CodeSymbol
 }
@@ -69,10 +71,13 @@ func NewCodeSymbol(name string, ttype CodeSymbolType, fromRule antlr.ParserRuleC
 	stopToken := fromRule.GetStop()
 
 	return &CodeSymbol{
-		Name:     name,
-		Type:     ttype,
-		Detail:   "",
-		Bounds:   Bounds{Start: FileLocation{startToken.GetLine(), startToken.GetColumn()}, End: FileLocation{stopToken.GetLine(), stopToken.GetColumn()}},
+		Name:   name,
+		Type:   ttype,
+		Detail: "",
+		Bounds: loc.Bounds{
+			Start: loc.FileLocation{Line: startToken.GetLine(), Column: startToken.GetColumn()},
+			End:   loc.FileLocation{Line: stopToken.GetLine(), Column: stopToken.GetColumn()},
+		},
 		Children: make([]*CodeSymbol, 0),
 	}
 }
@@ -101,7 +106,7 @@ func (cs *CodeSymbol) String() string {
 func FindSymbols(tree antlr.Tree) []*CodeSymbol {
 	visitor := &symbolVisitor{
 		BaseJavaParserListener: javaparser.BaseJavaParserListener{},
-		scopeTracker:           NewScopeTracker(),
+		scopeTracker:           parse.NewScopeTracker(),
 		topLevelSymbols:        make([]*CodeSymbol, 0),
 		symbolStack:            util.NewStack[*CodeSymbol](),
 	}
@@ -111,7 +116,7 @@ func FindSymbols(tree antlr.Tree) []*CodeSymbol {
 
 type symbolVisitor struct {
 	javaparser.BaseJavaParserListener
-	scopeTracker    *ScopeTracker
+	scopeTracker    *parse.ScopeTracker
 	topLevelSymbols []*CodeSymbol
 	symbolStack     util.Stack[*CodeSymbol]
 }

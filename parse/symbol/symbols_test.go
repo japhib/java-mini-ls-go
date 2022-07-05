@@ -1,7 +1,9 @@
-package parse
+package symbol
 
 import (
 	"github.com/stretchr/testify/assert"
+	"java-mini-ls-go/parse"
+	"java-mini-ls-go/parse/loc"
 	"testing"
 )
 
@@ -9,7 +11,7 @@ import (
 // want to test equality but not worry about bounds
 func zeroBounds(symbols []*CodeSymbol) {
 	for _, symbol := range symbols {
-		var b Bounds
+		var b loc.Bounds
 		symbol.Bounds = b
 
 		if symbol.Children != nil && len(symbol.Children) > 0 {
@@ -21,7 +23,7 @@ func zeroBounds(symbols []*CodeSymbol) {
 }
 
 func TestFindSymbols_Simple(t *testing.T) {
-	tree, errors := Parse(`
+	tree, errors := parse.Parse(`
 class MyClass {
 	public int asdf;
 }
@@ -40,7 +42,7 @@ class MyClass {
 }
 
 func TestFindSymbols_WithMain(t *testing.T) {
-	tree, errors := Parse(`
+	tree, errors := parse.Parse(`
 package java;
 
 import somepkg.Thing;
@@ -81,7 +83,7 @@ public class Main {
 }
 
 func TestFindSymbols_NestedClass(t *testing.T) {
-	tree, errors := Parse(`
+	tree, errors := parse.Parse(`
 class MyClass {
 	public String name;
 	public int asdf;

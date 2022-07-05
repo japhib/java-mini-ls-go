@@ -1,9 +1,10 @@
-package parse
+package typ
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"java-mini-ls-go/parse/loc"
 	"java-mini-ls-go/util"
 	"os"
 	"path/filepath"
@@ -204,7 +205,7 @@ func convertJsonField(parentType *JavaType, jsonField javaJsonField) *JavaField 
 		IsStatic:   slices.Contains(jsonField.Modifiers, "static"),
 		IsFinal:    slices.Contains(jsonField.Modifiers, "final"),
 		Definition: nil,
-		Usages:     []CodeLocation{},
+		Usages:     []loc.CodeLocation{},
 	}
 }
 
@@ -217,7 +218,7 @@ func convertJsonMethod(parentType *JavaType, jsonMethod javaJsonMethod) *JavaMet
 		Visibility: VisibilityPublic,
 		IsStatic:   slices.Contains(jsonMethod.Modifiers, "static"),
 		Definition: nil,
-		Usages:     []CodeLocation{},
+		Usages:     []loc.CodeLocation{},
 	}
 }
 
@@ -249,7 +250,7 @@ func loadJsonTypes(jsonTypes []javaJsonType) error {
 				ParentType: builtinTypes[jsonType.Name],
 				Params:     util.Map(jsonConstructor.Args, toArg),
 				Definition: nil,
-				Usages:     []CodeLocation{},
+				Usages:     []loc.CodeLocation{},
 				Visibility: VisibilityPublic,
 			})
 		}
