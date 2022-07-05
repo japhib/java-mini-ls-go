@@ -212,3 +212,36 @@ func TestServer_getTextOnLine(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "import somepkg.nestedpkg.Nibble;", text)
 }
+
+func TestServer_Hover(t *testing.T) {
+	ctx, cancel := testCtx()
+	defer cancel()
+	jls := testServer(t, ctx)
+
+	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: createTextDocument("test_location", testFileText),
+	})
+	assert.Nil(t, err)
+
+	// Hover in the middle of the "thing" variable declaration
+	result, err := jls.Hover(ctx, &protocol.HoverParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: uri.New("test_location"),
+			},
+			Position: protocol.Position{
+				Line:      13,
+				Character: 14,
+			},
+		},
+	})
+	assert.Nil(t, err)
+
+	assert.Equal(t, &protocol.Hover{
+		Contents: protocol.MarkupContent{
+			Kind:  protocol.Markdown,
+			Value: "**thing** Thing",
+		},
+		Range: nil,
+	}, result)
+}

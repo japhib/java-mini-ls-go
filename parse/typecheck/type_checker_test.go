@@ -178,11 +178,11 @@ public class MainClass {
 			Loc: parse.Bounds{
 				Start: parse.FileLocation{
 					Line:   5,
-					Column: 2,
+					Column: 6,
 				},
 				End: parse.FileLocation{
 					Line:   5,
-					Column: 10,
+					Column: 6,
 				},
 			},
 			Message: "Variable a is already defined in method add",

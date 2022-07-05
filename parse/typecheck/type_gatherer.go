@@ -11,14 +11,10 @@ import (
 // GatherTypes traverses the given parse tree and gathers all class, method, field, etc. declarations.
 // TODO doesn't get visibility of any types.
 func GatherTypes(tree antlr.Tree, builtins parse.TypeMap) parse.TypeMap {
-	visitor := &typeGatherer{
-		scopeTracker: parse.NewScopeTracker(),
-		builtins:     builtins,
-		types:        make(parse.TypeMap),
-		isFirstPass:  true,
-	}
+	visitor := newTypeGatherer(builtins)
 
 	// First pass: just get types (no fields/methods yet, since those will reference the types)
+	visitor.isFirstPass = true
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 
 	// Second pass: populate fields/methods on every type
@@ -42,9 +38,20 @@ type typeGatherer struct {
 	scopeTracker          *parse.ScopeTracker
 	builtins              parse.TypeMap
 	types                 parse.TypeMap
+	defUsages             *DefinitionsUsagesLookup
 	currPackageName       string
 	isFirstPass           bool
 	currentMemberIsStatic bool
+}
+
+func newTypeGatherer(builtins parse.TypeMap) *typeGatherer {
+	return &typeGatherer{
+		scopeTracker: parse.NewScopeTracker(),
+		builtins:     builtins,
+		types:        make(parse.TypeMap),
+		isFirstPass:  true,
+		defUsages:    NewDefinitionsUsagesLookup(),
+	}
 }
 
 func (tg *typeGatherer) setSecondPass() {
@@ -163,6 +170,15 @@ func (tg *typeGatherer) addNewTypeFromScope(scope *parse.Scope, ttype parse.Java
 	}
 
 	tg.types[scope.Name] = newType
+
+	tg.defUsages.NewSymbol(scope.Bounds, NewSymbolWithDefUsages(
+		scope.Name,
+		newType,
+		parse.CodeLocation{
+			FileUri: "",
+			Loc:     scope.Bounds,
+		}),
+	)
 }
 
 func (tg *typeGatherer) checkScopeExtendsImplements(scope *parse.Scope, ctx antlr.ParserRuleContext) {

@@ -9,5 +9,6 @@
 - Implement resolution for static methods/fields (like `System.out.println()`)
 - Automatically parse all files in project on startup
 - Handle array types
+- Fix squigglies? They're kind of in weird spots
 - Add warnings for unused variable
 - Call it good

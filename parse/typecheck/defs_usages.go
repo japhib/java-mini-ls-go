@@ -4,10 +4,21 @@ import "java-mini-ls-go/parse"
 
 // SymbolWithDefUsages keeps tracks of the definition and all the usages of a symbol.
 type SymbolWithDefUsages struct {
+	// TODO SymbolName is insufficient to uniquely identify a constructor or method since they can be overloaded.
+	// Should use fully qualified name - {package}.{class}.{method}.{args}
 	SymbolName string
 	SymbolType *parse.JavaType
 	Definition parse.CodeLocation
 	Usages     []parse.CodeLocation
+}
+
+func NewSymbolWithDefUsages(name string, ttype *parse.JavaType, definition parse.CodeLocation) *SymbolWithDefUsages {
+	return &SymbolWithDefUsages{
+		SymbolName: name,
+		SymbolType: ttype,
+		Definition: definition,
+		Usages:     []parse.CodeLocation{},
+	}
 }
 
 // DefinitionsUsagesWithLocation is a single definition or usage of a symbol.
@@ -28,28 +39,33 @@ type DefinitionsUsagesOnLine []DefinitionsUsagesWithLocation
 // a file URI and code location to figuring out what identifier is being pointed to,
 // and finding its corresponding SymbolWithDefUsages struct.
 type DefinitionsUsagesLookup struct {
-	// LookupTable is a map of line numbers to the list of DefinitionsUsagesWithLocation on that line.
-	LookupTable map[int]DefinitionsUsagesOnLine
+	// DefUsagesByLine is a map of line numbers to the list of DefinitionsUsagesWithLocation on that line.
+	DefUsagesByLine map[int]DefinitionsUsagesOnLine
+
+	// DefUsagesByName is a map of symbols *defined* in this file (not just used) by name.
+	// TODO might be unused
+	DefUsagesByName map[string]*SymbolWithDefUsages
 }
 
 func NewDefinitionsUsagesLookup() *DefinitionsUsagesLookup {
 	return &DefinitionsUsagesLookup{
-		LookupTable: make(map[int]DefinitionsUsagesOnLine),
+		DefUsagesByLine: make(map[int]DefinitionsUsagesOnLine),
+		DefUsagesByName: make(map[string]*SymbolWithDefUsages),
 	}
 }
 
 func (dul *DefinitionsUsagesLookup) GetLine(line int) DefinitionsUsagesOnLine {
-	return dul.LookupTable[line]
+	return dul.DefUsagesByLine[line]
 }
 
-func (dul *DefinitionsUsagesLookup) Add(loc parse.Bounds, defUsToAdd *SymbolWithDefUsages) {
+func (dul *DefinitionsUsagesLookup) NewSymbol(loc parse.Bounds, defUsToAdd *SymbolWithDefUsages) {
 	lineNumber := loc.Start.Line
-	line := dul.LookupTable[lineNumber]
+	line := dul.DefUsagesByLine[lineNumber]
 
 	// If a list for that line doesn't exist, create it now
 	if line != nil {
 		line = make(DefinitionsUsagesOnLine, 0)
-		dul.LookupTable[lineNumber] = line
+		dul.DefUsagesByLine[lineNumber] = line
 	}
 
 	// Also make sure there's not already an item with that name/bounds
@@ -68,13 +84,16 @@ func (dul *DefinitionsUsagesLookup) Add(loc parse.Bounds, defUsToAdd *SymbolWith
 	})
 
 	// Make sure to assign it back in case append had to realloc
-	dul.LookupTable[lineNumber] = line
+	dul.DefUsagesByLine[lineNumber] = line
+
+	// Add to DefUsagesByName as well
+	dul.DefUsagesByName[defUsToAdd.SymbolName] = defUsToAdd
 }
 
 // Lookup Given a file location, returns the most specific SymbolWithDefUsages instance corresponding
 // to that file location, if one exists.
 func (dul *DefinitionsUsagesLookup) Lookup(loc parse.FileLocation) *SymbolWithDefUsages {
-	line := dul.LookupTable[loc.Line]
+	line := dul.DefUsagesByLine[loc.Line]
 	if line == nil {
 		return nil
 	}

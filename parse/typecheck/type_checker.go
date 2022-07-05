@@ -158,7 +158,7 @@ func (tc *typeChecker) checkAndAddLocal(name string, ttype *parse.JavaType, boun
 	}
 
 	topScope.addLocal(name, ttype, bounds, tc.currFileURI)
-	tc.defUsages.Add(bounds, &SymbolWithDefUsages{
+	tc.defUsages.NewSymbol(bounds, &SymbolWithDefUsages{
 		SymbolName: name,
 		SymbolType: ttype,
 		Definition: parse.CodeLocation{
