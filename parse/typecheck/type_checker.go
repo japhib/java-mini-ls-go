@@ -104,12 +104,12 @@ func newTypeChecker(logger *zap.Logger, fileURI string, userTypes typ.TypeMap, b
 		// Bounds representing the entire file
 		loc.Bounds{
 			Start: loc.FileLocation{
-				Line:   0,
-				Column: 0,
+				Line:      0,
+				Character: 0,
 			},
 			End: loc.FileLocation{
-				Line:   math.MaxInt,
-				Column: math.MaxInt,
+				Line:      math.MaxInt,
+				Character: math.MaxInt,
 			},
 		},
 	)

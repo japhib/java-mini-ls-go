@@ -11,4 +11,4 @@
 - Handle array types
 - Fix squigglies? They're kind of in weird spots
 - Add warnings for unused variable
-- Call it good
+- Change the LSP to stop using 1-based line numbers

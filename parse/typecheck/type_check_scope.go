@@ -42,17 +42,17 @@ func (tcs *TypeCheckingScope) Contains(location loc.FileLocation) bool {
 
 	// one-line scope
 	if tcs.Location.Start.Line == tcs.Location.End.Line {
-		return location.Column >= tcs.Location.Start.Column && location.Column <= tcs.Location.End.Column
+		return location.Character >= tcs.Location.Start.Character && location.Character <= tcs.Location.End.Character
 	}
 
 	// First Line
 	if location.Line == tcs.Location.Start.Line {
-		return location.Column >= tcs.Location.Start.Column
+		return location.Character >= tcs.Location.Start.Character
 	}
 
 	// last Line
 	if location.Line == tcs.Location.End.Line {
-		return location.Column <= tcs.Location.End.Column
+		return location.Character <= tcs.Location.End.Character
 	}
 
 	// it's on a middle line, columns don't matter

@@ -43,13 +43,9 @@ func (dul *DefinitionsUsagesLookup) Add(location loc.CodeLocation, symbol typ.Ja
 	}
 
 	lineNumber := location.Loc.Start.Line
+	// Look up the list for the line
+	// Note: it's okay if it's nil because append treats it the same as if it were an empty slice.
 	line := dul.DefUsagesByLine[lineNumber]
-
-	// If a list for that line doesn't exist, create it now
-	if line != nil {
-		line = make(SymbolsOnLine, 0)
-		dul.DefUsagesByLine[lineNumber] = line
-	}
 
 	// Also make sure there's not already an item with that name/bounds
 	for _, defUsages := range line {
@@ -78,23 +74,25 @@ func (dul *DefinitionsUsagesLookup) Lookup(loc loc.FileLocation) typ.JavaSymbol 
 		return nil
 	}
 
-	var found *SymbolWithLocation = nil
+	alreadyFound := false
+	var foundSymbol SymbolWithLocation
 
 	for _, def := range line {
 		matches := loc.Line == def.Loc.Start.Line &&
-			loc.Column >= def.Loc.Start.Column &&
-			loc.Column <= def.Loc.End.Column
+			loc.Character >= def.Loc.Start.Character &&
+			loc.Character <= def.Loc.End.Character
 
 		// Make sure we find the match with the narrowest bounds
-		narrower := found == nil || def.Loc.Size() < found.Loc.Size()
+		narrower := !alreadyFound || def.Loc.Size() < foundSymbol.Loc.Size()
 
 		if matches && narrower {
-			found = &def
+			alreadyFound = true
+			foundSymbol = def
 		}
 	}
 
-	if found != nil {
-		return found.Symbol
+	if alreadyFound {
+		return foundSymbol.Symbol
 	}
 	return nil
 }

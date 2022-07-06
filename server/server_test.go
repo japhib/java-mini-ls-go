@@ -248,7 +248,7 @@ func TestServer_Hover(t *testing.T) {
 }
 
 const localTestFileText = `public class Main {
-    public void main() {
+    public int main() {
 		int a = 0;
 		return a;
     }
@@ -288,6 +288,165 @@ func TestServer_References(t *testing.T) {
 				End: protocol.Position{
 					Line:      3,
 					Character: 10,
+				},
+			},
+		},
+	}, result)
+}
+
+func TestServer_Definition(t *testing.T) {
+	ctx, cancel := testCtx()
+	defer cancel()
+	jls := testServer(t, ctx)
+
+	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: createTextDocument("test_location", localTestFileText),
+	})
+	assert.Nil(t, err)
+
+	result, err := jls.Definition(ctx, &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: uri.New("test_location"),
+			},
+			Position: protocol.Position{
+				Line:      3,
+				Character: 9,
+			},
+		},
+	})
+	assert.Nil(t, err)
+
+	assert.Equal(t, []protocol.Location{
+		{
+			URI: uri.New("test_location"),
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      2,
+					Character: 6,
+				},
+				End: protocol.Position{
+					Line:      2,
+					Character: 7,
+				},
+			},
+		},
+	}, result)
+}
+
+const localTestFileText2 = `public class Main {
+	public void main() {
+		int b = 1;
+		long c = b;
+		Integer boxedInt = b;
+	}
+}`
+
+func TestServer_MultipleUsagesAndDef(t *testing.T) {
+	ctx, cancel := testCtx()
+	defer cancel()
+	jls := testServer(t, ctx)
+
+	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: createTextDocument("test_location", localTestFileText2),
+	})
+	assert.Nil(t, err)
+
+	// Get references -- should return 2
+	result, err := jls.References(ctx, &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: uri.New("test_location"),
+			},
+			Position: protocol.Position{
+				Line:      2,
+				Character: 6,
+			},
+		},
+	})
+	assert.Nil(t, err)
+
+	assert.Equal(t, []protocol.Location{
+		{
+			URI: uri.New("test_location"),
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      3,
+					Character: 11,
+				},
+				End: protocol.Position{
+					Line:      3,
+					Character: 12,
+				},
+			},
+		},
+		{
+			URI: uri.New("test_location"),
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      4,
+					Character: 21,
+				},
+				End: protocol.Position{
+					Line:      4,
+					Character: 22,
+				},
+			},
+		},
+	}, result)
+
+	// Get definition from 2 different places -- should both return the original declaration `int b = 1;`
+	result, err = jls.Definition(ctx, &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: uri.New("test_location"),
+			},
+			Position: protocol.Position{
+				Line:      3,
+				Character: 11,
+			},
+		},
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, []protocol.Location{
+		{
+			URI: uri.New("test_location"),
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      2,
+					Character: 6,
+				},
+				End: protocol.Position{
+					Line:      2,
+					Character: 7,
+				},
+			},
+		},
+	}, result)
+
+	result, err = jls.Definition(ctx, &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: uri.New("test_location"),
+			},
+			Position: protocol.Position{
+				Line:      4,
+				Character: 21,
+			},
+		},
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, []protocol.Location{
+		{
+			URI: uri.New("test_location"),
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      2,
+					Character: 6,
+				},
+				End: protocol.Position{
+					Line:      2,
+					Character: 7,
 				},
 			},
 		},

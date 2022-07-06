@@ -88,6 +88,7 @@ func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams
 			DocumentSymbolProvider: true,
 			HoverProvider:          true,
 			ReferencesProvider:     true,
+			DefinitionProvider:     true,
 		},
 		ServerInfo: nil,
 	}, nil
@@ -203,8 +204,8 @@ func (j *JavaLS) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 
 	symbol := lookup.Lookup(loc.FileLocation{
 		// Note: the +1 is convert from 0-based line numbers (LSP) to 1-based line numbers (this project)
-		Line:   int(params.Position.Line) + 1,
-		Column: int(params.Position.Character),
+		Line:      int(params.Position.Line) + 1,
+		Character: int(params.Position.Character),
 	})
 	if symbol == nil {
 		return nil, nil
@@ -274,8 +275,8 @@ func (j *JavaLS) References(_ context.Context, params *protocol.ReferenceParams)
 
 	symbol := lookup.Lookup(loc.FileLocation{
 		// Note: the +1 is convert from 0-based line numbers (LSP) to 1-based line numbers (this project)
-		Line:   int(params.Position.Line) + 1,
-		Column: int(params.Position.Character),
+		Line:      int(params.Position.Line) + 1,
+		Character: int(params.Position.Character),
 	})
 	if symbol == nil {
 		return nil, nil
@@ -289,4 +290,22 @@ func codeLocationToLSPLocation(loca loc.CodeLocation) protocol.Location {
 		URI:   uri.New(loca.FileUri),
 		Range: loc.BoundsToRange(loca.Loc),
 	}
+}
+
+func (j *JavaLS) Definition(_ context.Context, params *protocol.DefinitionParams) ([]protocol.Location, error) {
+	lookup, ok := j.defUsages.Get(string(params.TextDocument.URI))
+	if !ok {
+		return nil, nil
+	}
+
+	symbol := lookup.Lookup(loc.FileLocation{
+		// Note: the +1 is convert from 0-based line numbers (LSP) to 1-based line numbers (this project)
+		Line:      int(params.Position.Line) + 1,
+		Character: int(params.Position.Character),
+	})
+	if symbol == nil || symbol.GetDefinition() == nil {
+		return nil, nil
+	}
+
+	return []protocol.Location{codeLocationToLSPLocation(*symbol.GetDefinition())}, nil
 }

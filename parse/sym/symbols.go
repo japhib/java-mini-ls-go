@@ -75,8 +75,8 @@ func NewCodeSymbol(name string, ttype CodeSymbolType, fromRule antlr.ParserRuleC
 		Type:   ttype,
 		Detail: "",
 		Bounds: loc.Bounds{
-			Start: loc.FileLocation{Line: startToken.GetLine(), Column: startToken.GetColumn()},
-			End:   loc.FileLocation{Line: stopToken.GetLine(), Column: stopToken.GetColumn()},
+			Start: loc.FileLocation{Line: startToken.GetLine(), Character: startToken.GetColumn()},
+			End:   loc.FileLocation{Line: stopToken.GetLine(), Character: stopToken.GetColumn()},
 		},
 		Children: make([]*CodeSymbol, 0),
 	}

@@ -55,8 +55,8 @@ func (se *SyntaxError) ToDiagnostic() protocol.Diagnostic {
 		Range: loc.BoundsToRange(loc.Bounds{
 			Start: se.Loc,
 			End: loc.FileLocation{
-				Line:   se.Loc.Line,
-				Column: se.Loc.Column + len(se.Token),
+				Line:      se.Loc.Line,
+				Character: se.Loc.Character + len(se.Token),
 			},
 		}),
 		Severity:           protocol.DiagnosticSeverityError,
@@ -79,7 +79,7 @@ var _ antlr.ErrorListener = (*errorListener)(nil)
 
 func (el *errorListener) SyntaxError(_ antlr.Recognizer, offendingSymbol interface{}, line, column int, msg string, _ antlr.RecognitionException) {
 	err := SyntaxError{
-		Loc:     loc.FileLocation{Line: line, Column: column},
+		Loc:     loc.FileLocation{Line: line, Character: column},
 		Token:   offendingSymbol.(antlr.Token).GetText(),
 		Message: msg,
 	}

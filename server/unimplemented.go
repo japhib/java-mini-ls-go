@@ -47,10 +47,6 @@ func (j *JavaLS) Declaration(ctx context.Context, params *protocol.DeclarationPa
 	panic("Declaration unimplemented")
 }
 
-func (j *JavaLS) Definition(ctx context.Context, params *protocol.DefinitionParams) ([]protocol.Location, error) {
-	panic("Definition unimplemented")
-}
-
 func (j *JavaLS) DidChangeConfiguration(ctx context.Context, params *protocol.DidChangeConfigurationParams) error {
 	panic("DidChangeConfiguration unimplemented")
 }

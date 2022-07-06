@@ -7,17 +7,17 @@ import (
 )
 
 type FileLocation struct {
-	Line   int
-	Column int
+	Line      int
+	Character int
 }
 
 func (fl FileLocation) Equals(other FileLocation) bool {
 	return fl.Line == other.Line &&
-		fl.Column == other.Column
+		fl.Character == other.Character
 }
 
 func (fl FileLocation) String() string {
-	return fmt.Sprintf("%d:%d", fl.Line, fl.Column)
+	return fmt.Sprintf("%d:%d", fl.Line, fl.Character)
 }
 
 type Bounds struct {
@@ -40,11 +40,11 @@ func BoundsToRange(bounds Bounds) protocol.Range {
 		Start: protocol.Position{
 			// Subtract 1 since we use 1-based line numbers but LSP expects 0-based
 			Line:      uint32(bounds.Start.Line) - 1,
-			Character: uint32(bounds.Start.Column),
+			Character: uint32(bounds.Start.Character),
 		},
 		End: protocol.Position{
 			Line:      uint32(bounds.End.Line) - 1,
-			Character: uint32(bounds.End.Column),
+			Character: uint32(bounds.End.Character),
 		},
 	}
 }
@@ -55,9 +55,9 @@ func (b Bounds) Equals(other Bounds) bool {
 
 func (b Bounds) String() string {
 	if b.Start.Line != b.End.Line {
-		return fmt.Sprintf("%d:%d-%d:%d", b.Start.Line, b.Start.Column, b.End.Line, b.End.Column)
+		return fmt.Sprintf("%d:%d-%d:%d", b.Start.Line, b.Start.Character, b.End.Line, b.End.Character)
 	} else {
-		return fmt.Sprintf("%d:%d-%d", b.Start.Line, b.Start.Column, b.End.Column)
+		return fmt.Sprintf("%d:%d-%d", b.Start.Line, b.Start.Character, b.End.Character)
 	}
 }
 
@@ -66,7 +66,7 @@ func (b Bounds) Size() int {
 
 	columnSize := 0
 	if lineSize == 0 {
-		columnSize = b.End.Column - b.Start.Column
+		columnSize = b.End.Character - b.Start.Character
 	}
 
 	return (lineSize * 10000) + columnSize

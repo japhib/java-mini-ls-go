@@ -128,12 +128,12 @@ public class MainClass {
 		{
 			Loc: loc.Bounds{
 				Start: loc.FileLocation{
-					Line:   3,
-					Column: 16,
+					Line:      3,
+					Character: 16,
 				},
 				End: loc.FileLocation{
-					Line:   3,
-					Column: 20,
+					Line:      3,
+					Character: 20,
 				},
 			},
 			Message: "Type mismatch: cannot convert from String to int",
@@ -153,12 +153,12 @@ public class MainClass {
 		{
 			Loc: loc.Bounds{
 				Start: loc.FileLocation{
-					Line:   4,
-					Column: 22,
+					Line:      4,
+					Character: 22,
 				},
 				End: loc.FileLocation{
-					Line:   4,
-					Column: 23,
+					Line:      4,
+					Character: 23,
 				},
 			},
 			Message: "Type mismatch: cannot convert from int to String",
@@ -179,12 +179,12 @@ public class MainClass {
 		{
 			Loc: loc.Bounds{
 				Start: loc.FileLocation{
-					Line:   5,
-					Column: 6,
+					Line:      5,
+					Character: 6,
 				},
 				End: loc.FileLocation{
-					Line:   5,
-					Column: 7,
+					Line:      5,
+					Character: 7,
 				},
 			},
 			Message: "Variable a is already defined in method add",
@@ -219,8 +219,8 @@ public class MainClass {
 
 	assertSymbol := func(line, col int, kind typ.JavaSymbolKind, name string) {
 		result := defUsages.Lookup(loc.FileLocation{
-			Line:   line,
-			Column: col,
+			Line:      line,
+			Character: col,
 		})
 		assert.NotNilf(t, result, "Nil result for lookup at %d:%d", line, col)
 		if result != nil {
