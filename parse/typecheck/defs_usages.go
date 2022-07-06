@@ -17,6 +17,8 @@ type SymbolWithLocation struct {
 
 // SymbolsOnLine is a list of all the identifiers on a line of code in the editor,
 // their bounds, and all the SymbolWithLocation they point to.
+//
+// Note: if there is a super long line (minified or something), this will probably have bad performance.
 type SymbolsOnLine []SymbolWithLocation
 
 // DefinitionsUsagesLookup is a lookup table that helps the language server go from just

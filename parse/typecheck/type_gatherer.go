@@ -159,12 +159,16 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 	if varDeclsI != nil {
 		varDecls := varDeclsI.(*javaparser.VariableDeclaratorsContext)
 		for _, varDecl := range varDecls.AllVariableDeclarator() {
-			fieldName := varDecl.GetText()
+			ident := varDecl.(*javaparser.VariableDeclaratorContext).VariableDeclaratorId().(*javaparser.VariableDeclaratorIdContext).Identifier()
+			fieldName := ident.GetText()
+			bounds := loc.ParserRuleContextToBounds(ident)
+			defLocation := loc.CodeLocation{FileUri: tg.currFileURI, Loc: bounds}
+
 			field := &typ.JavaField{
 				Name:       fieldName,
 				Type:       fieldType,
 				ParentType: currType,
-				Definition: nil,
+				Definition: &defLocation,
 				Usages:     []loc.CodeLocation{},
 				Visibility: 0,
 				IsStatic:   tg.currentMemberIsStatic,
@@ -173,6 +177,8 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 			}
 
 			currType.Fields = append(currType.Fields, field)
+
+			tg.defUsages.Add(defLocation, field, false)
 		}
 	}
 }

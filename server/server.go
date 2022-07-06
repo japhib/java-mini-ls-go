@@ -222,7 +222,7 @@ func (j *JavaLS) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 }
 
 // NOTE: line is 0-based here (LSP style)
-// This is unused, can we delete it?
+// Will probably be used for auto-completion
 func (j *JavaLS) getTextOnLine(fileURI string, line int) (string, error) {
 	text, ok := j.documentTextCache.Get(fileURI)
 	if !ok {

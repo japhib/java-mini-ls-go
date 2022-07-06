@@ -234,3 +234,48 @@ public class MainClass {
 	assertSymbol(4, 6, typ.JavaSymbolLocal, "a")
 	assertSymbol(5, 9, typ.JavaSymbolLocal, "b")
 }
+
+func TestCheckTypes_FieldUsage(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+public class MainClass {
+	int a = 1;
+	public int getA() {
+		return a;
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{}, typeErrors)
+
+	// Get definition: from `return a` to `int a = 1`
+	defUsages := typeCheckResult.DefUsagesLookup
+	defResult := defUsages.Lookup(loc.FileLocation{Line: 5, Character: 9})
+	assert.NotNil(t, defResult)
+	if defResult != nil {
+		assert.Equal(t, typ.JavaSymbolField, defResult.Kind())
+		assert.Equal(t, "a", defResult.ShortName())
+
+		assert.Equal(t, &loc.CodeLocation{
+			FileUri: "type_checker_test",
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{Line: 3, Character: 5},
+				End:   loc.FileLocation{Line: 3, Character: 6},
+			},
+		}, defResult.GetDefinition())
+	}
+
+	// Get references: from `int a = 1` to `return a`
+	refResult := defUsages.Lookup(loc.FileLocation{Line: 3, Character: 5})
+	assert.NotNil(t, refResult)
+	if refResult != nil {
+		assert.Equal(t, typ.JavaSymbolField, refResult.Kind())
+		assert.Equal(t, "a", refResult.ShortName())
+
+		assert.Equal(t, []loc.CodeLocation{{
+			FileUri: "type_checker_test",
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{Line: 5, Character: 9},
+				End:   loc.FileLocation{Line: 5, Character: 10},
+			},
+		}}, refResult.GetUsages())
+	}
+}
