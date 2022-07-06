@@ -17,15 +17,33 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-type TypeMap map[string]*JavaType
+type TypeMap struct {
+	contents map[string]*JavaType
+}
+
+func NewTypeMap() *TypeMap {
+	return &TypeMap{contents: make(map[string]*JavaType)}
+}
+
+func (tm *TypeMap) Add(t *JavaType) {
+	tm.contents[t.FullName()] = t
+}
+
+func (tm *TypeMap) Get(s string) *JavaType {
+	return tm.contents[s]
+}
+
+func (tm *TypeMap) Size() int {
+	return len(tm.contents)
+}
 
 // The actual built-in types map that we load into
-var builtinTypes TypeMap
+var builtinTypes *TypeMap
 
 // The mutex is probably not necessary, but good to have just in case
 var builtinTypesMutex sync.Mutex
 
-func LoadBuiltinTypes() (TypeMap, error) {
+func LoadBuiltinTypes() (*TypeMap, error) {
 	builtinTypesMutex.Lock()
 	defer builtinTypesMutex.Unlock()
 
@@ -47,7 +65,7 @@ func LoadBuiltinTypes() (TypeMap, error) {
 	now = time.Now()
 	endTime := now.UnixMilli()
 	duration := endTime - startTime
-	fmt.Printf("Loaded %d Java standard library types in %dms\n", len(builtinTypes), duration)
+	fmt.Printf("Loaded %d Java standard library types in %dms\n", builtinTypes.Size(), duration)
 
 	return builtinTypes, nil
 }
@@ -64,6 +82,13 @@ type javaJsonType struct {
 	Fields       []javaJsonField       `json:"fields"`
 	Methods      []javaJsonMethod      `json:"methods"`
 	Constructors []javaJsonConstructor `json:"constructors"`
+
+	// TODO add generics
+}
+
+func (jjt *javaJsonType) FullName() string {
+	// Should mimic the output of JavaType.FullName()
+	return jjt.Name
 }
 
 type javaJsonField struct {
@@ -98,7 +123,7 @@ func loadBuiltinTypesFromDisk() error {
 		return errors.Wrapf(err, "Error reading JSON from disk")
 	}
 
-	builtinTypes = make(TypeMap)
+	builtinTypes = NewTypeMap()
 
 	// add primitive types before we load the rest of the types
 	AddPrimitiveTypes(builtinTypes)
@@ -161,7 +186,7 @@ func getStdlibJsonPath() (string, error) {
 	return absPath, nil
 }
 
-func AddPrimitiveTypes(typeMap TypeMap) {
+func AddPrimitiveTypes(typeMap *TypeMap) {
 	primitives := []string{
 		"byte",
 		"short",
@@ -174,7 +199,7 @@ func AddPrimitiveTypes(typeMap TypeMap) {
 	}
 
 	for _, name := range primitives {
-		typeMap[name] = NewPrimitiveType(name)
+		typeMap.Add(NewPrimitiveType(name))
 	}
 }
 
@@ -227,12 +252,12 @@ func loadJsonTypes(jsonTypes []javaJsonType) error {
 	// First, get just the bare types defined
 	for _, jsonType := range jsonTypes {
 		newType := NewJavaType(jsonType.Name, jsonType.Package, VisibilityPublic, convertJsonTypeType(jsonType.Type), nil)
-		builtinTypes[jsonType.Name] = newType
+		builtinTypes.Add(newType)
 	}
 
 	// Next, fill in extends/implements references
 	for _, jsonType := range jsonTypes {
-		ttype := builtinTypes[jsonType.Name]
+		ttype := builtinTypes.Get(jsonType.Name)
 		if jsonType.Extends != nil {
 			ttype.Extends = util.Map(jsonType.Extends, getOrCreateBuiltinType)
 		}
@@ -245,9 +270,11 @@ func loadJsonTypes(jsonTypes []javaJsonType) error {
 	for _, jsonType := range jsonTypes {
 		constructors := make([]*JavaConstructor, 0, len(jsonType.Constructors))
 
+		parentType := builtinTypes.Get(jsonType.FullName())
+
 		for _, jsonConstructor := range jsonType.Constructors {
 			constructors = append(constructors, &JavaConstructor{
-				ParentType: builtinTypes[jsonType.Name],
+				ParentType: parentType,
 				Params:     util.Map(jsonConstructor.Args, toArg),
 				Definition: nil,
 				Usages:     []loc.CodeLocation{},
@@ -255,17 +282,17 @@ func loadJsonTypes(jsonTypes []javaJsonType) error {
 			})
 		}
 
-		builtinTypes[jsonType.Name].Constructors = constructors
+		parentType.Constructors = constructors
 	}
 
 	// Next, fill in the fields & methods
 	for _, jsonType := range jsonTypes {
-		javaType := builtinTypes[jsonType.Name]
-		javaType.Fields = util.Map(jsonType.Fields, func(jsonField javaJsonField) *JavaField {
-			return convertJsonField(javaType, jsonField)
+		parentType := builtinTypes.Get(jsonType.FullName())
+		parentType.Fields = util.Map(jsonType.Fields, func(jsonField javaJsonField) *JavaField {
+			return convertJsonField(parentType, jsonField)
 		})
-		javaType.Methods = util.Map(jsonType.Methods, func(jsonMethod javaJsonMethod) *JavaMethod {
-			return convertJsonMethod(javaType, jsonMethod)
+		parentType.Methods = util.Map(jsonType.Methods, func(jsonMethod javaJsonMethod) *JavaMethod {
+			return convertJsonMethod(parentType, jsonMethod)
 		})
 	}
 
@@ -283,11 +310,11 @@ func toArg(arg javaJsonArg) *JavaParameter {
 // Function for getting/creating builtin types that *should* exist but for some reason we haven't parsed them.
 // Creates a basic placeholder type for them.
 func getOrCreateBuiltinType(name string) *JavaType {
-	jtype, ok := builtinTypes[name]
-	if !ok {
-		//fmt.Println("Creating built-in type: ", name)
+	jtype := builtinTypes.Get(name)
+	if jtype == nil {
+		fmt.Println("Creating built-in type: ", name)
 		jtype = NewJavaType(name, "", VisibilityPublic, JavaTypeClass, nil)
-		builtinTypes[name] = jtype
+		builtinTypes.Add(jtype)
 	}
 
 	return jtype

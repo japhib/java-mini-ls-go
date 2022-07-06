@@ -46,6 +46,9 @@ type JavaSymbol interface {
 
 	// AddUsage adds a usage of this symbol in the given location.
 	AddUsage(loc.CodeLocation)
+
+	// GetType returns the type of this symbol, using a special LSP type for classes & methods
+	GetType() *JavaType
 }
 
 type VisibilityType int
@@ -75,6 +78,9 @@ const (
 	JavaTypeEnum       JavaTypeType = iota
 	JavaTypeRecord     JavaTypeType = iota
 	JavaTypeAnnotation JavaTypeType = iota
+
+	// A special kind of Java type used internally by the LSP
+	JavaTypeLSPMethod JavaTypeType = iota
 )
 
 var JavaTypeTypeStrs = map[JavaTypeType]string{
@@ -106,6 +112,13 @@ type JavaType struct {
 	Fields       []*JavaField
 	Methods      []*JavaMethod
 
+	// TODO add generic constraints
+
+	// For a *concrete* generic type (e.g. List<String>), this contains the type arguments (String).
+	// For an *abstract* generic type (e.g. List<T>), this is nil.
+	// NOTE: These are only used for method resolution currently
+	GenericArgs []*JavaType
+
 	// Definition stores where this symbol is defined in the code.
 	// Is nil for built-in/library types.
 	Definition *loc.CodeLocation
@@ -126,6 +139,7 @@ func NewJavaType(name string, ppackage string, visibility VisibilityType, ttype 
 		Constructors: make([]*JavaConstructor, 0),
 		Fields:       make([]*JavaField, 0),
 		Methods:      make([]*JavaMethod, 0),
+		GenericArgs:  nil,
 		Definition:   definition,
 		Usages:       make([]loc.CodeLocation, 0),
 		Visibility:   visibility,
@@ -153,11 +167,24 @@ func (jt *JavaType) ShortName() string {
 }
 
 func (jt *JavaType) FullName() string {
-	if jt.Package != "" {
-		return fmt.Sprintf("%s.%s", jt.Package, jt.Name)
-	} else {
-		return jt.Name
+	genericsStr := ""
+	if jt.GenericArgs != nil && len(jt.GenericArgs) > 0 {
+		genericsStr = strings.Join(util.Map(jt.GenericArgs, func(t *JavaType) string {
+			return t.FullName()
+		}), ",")
+
+		genericsStr = "<" + genericsStr + ">"
 	}
+
+	// TODO use this when we can handle package names
+	//var mainName string
+	//if jt.Package != "" {
+	//	mainName = fmt.Sprintf("%s.%s", jt.Package, jt.Name)
+	//} else {
+	//	mainName =
+	//}
+
+	return jt.Name + genericsStr
 }
 
 func (jt *JavaType) GetVisibility() VisibilityType {
@@ -176,7 +203,16 @@ func (jt *JavaType) AddUsage(location loc.CodeLocation) {
 	jt.Usages = append(jt.Usages, location)
 }
 
-func (jt *JavaType) LookupField(name string) *JavaField {
+func (jt *JavaType) GetType() *JavaType {
+	// Create a new type just for this class
+	t := NewJavaType("__LSPClass__", "", VisibilityPublic, JavaTypeLSPMethod, nil)
+	t.GenericArgs = []*JavaType{jt}
+	return t
+	// Maybe TODO: If this type already exists, use the existing one, otherwise use the newly created one
+}
+
+func (jt *JavaType) LookupMember(name string) JavaSymbol {
+	// First check fields
 	idx := slices.IndexFunc(jt.Fields, func(field *JavaField) bool {
 		return field.Name == name
 	})
@@ -184,21 +220,9 @@ func (jt *JavaType) LookupField(name string) *JavaField {
 		return jt.Fields[idx]
 	}
 
-	// Go to parent class/interfaces and see if any of them have the field
-	for _, supertype := range jt.Extends {
-		field := supertype.LookupField(name)
-		if field != nil {
-			return field
-		}
-	}
-
-	// Not found
-	return nil
-}
-
-// TODO handle overrides
-func (jt *JavaType) LookupMethod(name string) *JavaMethod {
-	idx := slices.IndexFunc(jt.Methods, func(method *JavaMethod) bool {
+	// Then check methods
+	// TODO handle overrides
+	idx = slices.IndexFunc(jt.Methods, func(method *JavaMethod) bool {
 		return method.Name == name
 	})
 	if idx != -1 {
@@ -207,9 +231,9 @@ func (jt *JavaType) LookupMethod(name string) *JavaMethod {
 
 	// Go to parent class/interfaces and see if any of them have the field
 	for _, supertype := range jt.Extends {
-		method := supertype.LookupMethod(name)
-		if method != nil {
-			return method
+		member := supertype.LookupMember(name)
+		if member != nil {
+			return member
 		}
 	}
 
@@ -348,6 +372,10 @@ func (jf *JavaField) AddUsage(location loc.CodeLocation) {
 	jf.Usages = append(jf.Usages, location)
 }
 
+func (jf *JavaField) GetType() *JavaType {
+	return jf.Type
+}
+
 func (jf *JavaField) String() string {
 	return fmt.Sprintf("%s %s%s %s", VisibilityTypeStrs[jf.Visibility], getStaticStr(jf.IsStatic), jf.ParentType.Name, jf.Name)
 }
@@ -397,6 +425,25 @@ func (jc *JavaConstructor) GetUsages() []loc.CodeLocation {
 
 func (jc *JavaConstructor) AddUsage(location loc.CodeLocation) {
 	jc.Usages = append(jc.Usages, location)
+}
+
+func (jc *JavaConstructor) GetType() *JavaType {
+	// Create a new type just for this constructor that reflects its receiver type, return type, and parameters
+
+	t := NewJavaType("__LSPConstructor__", "", VisibilityPublic, JavaTypeLSPMethod, nil)
+
+	t.GenericArgs = make([]*JavaType, 1+len(jc.Params))
+	// Receiver type (also return type for constructor)
+	t.GenericArgs[0] = jc.ParentType
+
+	for i, param := range jc.Params {
+		// TODO if it's a varargs param, change it into the array type
+		t.GenericArgs[i+1] = param.Type
+	}
+
+	return t
+
+	// Maybe TODO: If this type already exists, use the existing one, otherwise use the newly created one
 }
 
 type JavaMethod struct {
@@ -458,6 +505,24 @@ func (jm *JavaMethod) GetUsages() []loc.CodeLocation {
 
 func (jm *JavaMethod) AddUsage(location loc.CodeLocation) {
 	jm.Usages = append(jm.Usages, location)
+}
+
+func (jm *JavaMethod) GetType() *JavaType {
+	// Create a new type just for this method that reflects its receiver type, return type, and parameters
+
+	t := NewJavaType("__LSPMethod__", "", VisibilityPublic, JavaTypeLSPMethod, nil)
+
+	t.GenericArgs = make([]*JavaType, 2+len(jm.Params))
+	t.GenericArgs[0] = jm.ParentType
+	t.GenericArgs[1] = jm.ReturnType
+	for i, param := range jm.Params {
+		// TODO if it's a varargs param, change it into the array type
+		t.GenericArgs[i+2] = param.Type
+	}
+
+	return t
+
+	// Maybe TODO: If this type already exists, use the existing one, otherwise use the newly created one
 }
 
 func (jm *JavaMethod) String() string {
@@ -532,4 +597,8 @@ func (jl *JavaLocal) GetUsages() []loc.CodeLocation {
 
 func (jl *JavaLocal) AddUsage(location loc.CodeLocation) {
 	jl.Usages = append(jl.Usages, location)
+}
+
+func (jl *JavaLocal) GetType() *JavaType {
+	return jl.Type
 }

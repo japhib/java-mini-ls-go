@@ -279,3 +279,72 @@ public class MainClass {
 		}}, refResult.GetUsages())
 	}
 }
+
+func TestCheckTypes_MethodUsage(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+public class MainClass {
+	public void main() {
+		int gotten = get1();
+	}
+
+	public int get1() {
+		return 1;
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{}, typeErrors)
+
+	// Get definition
+	defUsages := typeCheckResult.DefUsagesLookup
+	defResult := defUsages.Lookup(loc.FileLocation{Line: 4, Character: 15})
+	assert.NotNil(t, defResult)
+	if defResult != nil {
+		assert.Equal(t, typ.JavaSymbolMethod, defResult.Kind())
+		assert.Equal(t, "get1", defResult.ShortName())
+
+		assert.Equal(t, &loc.CodeLocation{
+			FileUri: "type_checker_test",
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{Line: 7, Character: 12},
+				End:   loc.FileLocation{Line: 7, Character: 16},
+			},
+		}, defResult.GetDefinition())
+	}
+
+	// Get references
+	refResult := defUsages.Lookup(loc.FileLocation{Line: 7, Character: 13})
+	assert.NotNil(t, refResult)
+	if refResult != nil {
+		assert.Equal(t, typ.JavaSymbolMethod, refResult.Kind())
+		assert.Equal(t, "get1", refResult.ShortName())
+
+		assert.Equal(t, []loc.CodeLocation{{
+			FileUri: "type_checker_test",
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{Line: 4, Character: 15},
+				End:   loc.FileLocation{Line: 4, Character: 19},
+			},
+		}}, refResult.GetUsages())
+	}
+}
+
+func TestCheckTypes_MethodReturnType(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+public class MainClass {
+	public void main() {
+		int gotten = getS();
+	}
+
+	public String getS() {
+		return "hi";
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{{
+		Loc: loc.Bounds{
+			Start: loc.FileLocation{Line: 4, Character: 15},
+			End:   loc.FileLocation{Line: 4, Character: 19},
+		},
+		Message: "Type mismatch: cannot convert from String to int",
+	}}, typeErrors)
+}

@@ -44,14 +44,14 @@ type TypeCheckResult struct {
 
 // CheckTypes is the entrypoint for all type-related analysis. First calls GatherTypes and then checkTypes,
 // helpfully stringing the return values of the one into the ones that are necessary for the other.
-func CheckTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, builtins typ.TypeMap) TypeCheckResult {
+func CheckTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, builtins *typ.TypeMap) TypeCheckResult {
 	types, defUsages := GatherTypes(fileURI, tree, builtins)
 	return checkTypes(logger, tree, fileURI, types, builtins, defUsages)
 }
 
 // checkTypes traverses the given parse tree and performs type checking in all applicable
 // places. e.g. expressions, return statements, function calls, etc.
-func checkTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, userTypes typ.TypeMap, builtins typ.TypeMap, defUsages *DefinitionsUsagesLookup) TypeCheckResult {
+func checkTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, userTypes *typ.TypeMap, builtins *typ.TypeMap, defUsages *DefinitionsUsagesLookup) TypeCheckResult {
 	visitor := newTypeChecker(logger, fileURI, userTypes, builtins, defUsages)
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 
@@ -80,8 +80,8 @@ type typeChecker struct {
 	javaparser.BaseJavaParserListener
 	logger       *zap.Logger
 	currFileURI  string
-	userTypes    typ.TypeMap
-	builtins     typ.TypeMap
+	userTypes    *typ.TypeMap
+	builtins     *typ.TypeMap
 	errors       []TypeError
 	scopeTracker *parse.ScopeTracker
 	rootScope    TypeCheckingScope
@@ -97,7 +97,7 @@ type typeChecker struct {
 	expressionStack util.Stack[typedExpression]
 }
 
-func newTypeChecker(logger *zap.Logger, fileURI string, userTypes typ.TypeMap, builtins typ.TypeMap, defUsages *DefinitionsUsagesLookup) *typeChecker {
+func newTypeChecker(logger *zap.Logger, fileURI string, userTypes *typ.TypeMap, builtins *typ.TypeMap, defUsages *DefinitionsUsagesLookup) *typeChecker {
 	rootScope := newTypeCheckingScope(
 		nil,
 		nil,
@@ -134,19 +134,19 @@ func (tc *typeChecker) addError(err TypeError) {
 }
 
 func (tc *typeChecker) lookupType(typeName string) *typ.JavaType {
-	userType, ok := tc.userTypes[typeName]
-	if ok {
+	userType := tc.userTypes.Get(typeName)
+	if userType != nil {
 		return userType
 	}
 
-	if builtinType, ok := tc.builtins[typeName]; ok {
+	if builtinType := tc.builtins.Get(typeName); builtinType != nil {
 		return builtinType
 	}
 
 	// Type doesn't exist, create it
 	fmt.Println("Creating built-in type: ", typeName)
 	jtype := typ.NewJavaType(typeName, "", typ.VisibilityPublic, typ.JavaTypeClass, nil)
-	tc.builtins[typeName] = jtype
+	tc.builtins.Add(jtype)
 
 	return jtype
 }
@@ -246,7 +246,7 @@ func (tc *typeChecker) getSymbolFromScope(scope *parse.Scope) typ.JavaSymbol {
 	}
 
 	// Look up method on enclosingType
-	return enclosingType.LookupMethod(scope.Name)
+	return enclosingType.LookupMember(scope.Name)
 }
 
 func (tc *typeChecker) ExitEveryRule(ctx antlr.ParserRuleContext) {
@@ -414,10 +414,11 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 	}
 
 	enclosing := tc.getEnclosingType()
-	field := enclosing.LookupField(identName)
-	if field != nil {
-		tc.defUsages.Add(loc.CodeLocation{FileUri: tc.currFileURI, Loc: bounds}, field, true)
-		tc.pushExprType(field.Type, bounds)
+	// Is there a class member by that name?
+	member := enclosing.LookupMember(identName)
+	if member != nil {
+		tc.defUsages.Add(loc.CodeLocation{FileUri: tc.currFileURI, Loc: bounds}, member, true)
+		tc.pushExprType(member.GetType(), bounds)
 		return
 	}
 
@@ -429,6 +430,25 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 
 	// The rest of the expression needs something to continue -- we'll assume it's of type Object
 	tc.pushExprType(tc.lookupType("Object"), bounds)
+}
+
+func (tc *typeChecker) ExitMethodCall(ctx *javaparser.MethodCallContext) {
+	// TODO handle this()/super() method calls (allowed in constructors only I believe)
+	ident := ctx.Identifier()
+	if ident != nil {
+		tc.handleIdentifier(ident.(*javaparser.IdentifierContext))
+	}
+
+	// The identifier should be a method of type __LSPMethod__
+	methodType := tc.expressionStack.Pop().ttype
+	if methodType.Name != "__LSPMethod__" {
+		tc.logger.Error("method is not __LSPMethod__, instead it's: " + methodType.Name)
+	}
+
+	// At this point, all expressions should be in order on the expression stack,
+	// from being previously visited.
+	// We just need to pop them off one by one and make sure they are compatible with
+	// the arguments of this method
 }
 
 func (tc *typeChecker) ExitExpression(ctx *javaparser.ExpressionContext) {
