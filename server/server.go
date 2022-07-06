@@ -28,7 +28,7 @@ type JavaLS struct {
 	symbols           *util.SyncMap[string, []*sym.CodeSymbol]
 	scopes            *util.SyncMap[string, typecheck.TypeCheckingScope]
 	defUsages         *util.SyncMap[string, *typecheck.DefinitionsUsagesLookup]
-	builtinTypes      map[string]*typ.JavaType
+	builtinTypes      *typ.TypeMap
 
 	// Dependencies that can be mocked for testing
 	diagnosticsPublisher DiagnosticsPublisher
@@ -46,7 +46,7 @@ func NewServer(ctx context.Context, logger *zap.Logger) *JavaLS {
 		symbols:              util.NewSyncMap[string, []*sym.CodeSymbol](),
 		scopes:               util.NewSyncMap[string, typecheck.TypeCheckingScope](),
 		defUsages:            util.NewSyncMap[string, *typecheck.DefinitionsUsagesLookup](),
-		builtinTypes:         make(map[string]*typ.JavaType),
+		builtinTypes:         typ.NewTypeMap(),
 		diagnosticsPublisher: &RealDiagnosticsPublisher{},
 		ReadStdlibTypes:      false,
 	}
@@ -223,6 +223,7 @@ func (j *JavaLS) Hover(ctx context.Context, params *protocol.HoverParams) (*prot
 
 // NOTE: line is 0-based here (LSP style)
 // Will probably be used for auto-completion
+//nolint:unused
 func (j *JavaLS) getTextOnLine(fileURI string, line int) (string, error) {
 	text, ok := j.documentTextCache.Get(fileURI)
 	if !ok {

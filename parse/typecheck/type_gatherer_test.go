@@ -7,13 +7,13 @@ import (
 	"testing"
 )
 
-func stripOutStuffWeDontWannaTest(types typ.TypeMap) {
+func stripOutStuffWeDontWannaTest(types *typ.TypeMap) {
 	nilOutCircularRefs(types)
 	stripAllsDefsUsages(types)
 }
 
-func stripAllsDefsUsages(types typ.TypeMap) {
-	for _, ttype := range types {
+func stripAllsDefsUsages(types *typ.TypeMap) {
+	for _, ttype := range types.AllTypes() {
 		stripDefsUsages(ttype)
 	}
 }
@@ -69,39 +69,37 @@ public class Main {
 		Name: "String",
 	}
 
-	builtins := typ.TypeMap{
-		"String": strType,
-	}
+	builtins := typ.NewTypeMap()
+	builtins.Add(strType)
 
 	types, _ := GatherTypes("testfile", tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
 
-	expectedTypes := typ.TypeMap{
-		"Main": {
-			Name:    "Main",
-			Package: "stuff",
-			Methods: []*typ.JavaMethod{
-				{
-					Name: "main",
-					// void -> nil
-					ReturnType: nil,
-					Params: []*typ.JavaParameter{
-						{
-							Name:      "args",
-							Type:      strType,
-							IsVarargs: false,
-						},
+	expectedTypes := typ.NewTypeMap()
+	expectedTypes.Add(&typ.JavaType{
+		Name:    "Main",
+		Package: "stuff",
+		Methods: []*typ.JavaMethod{
+			{
+				Name: "main",
+				// void -> nil
+				ReturnType: nil,
+				Params: []*typ.JavaParameter{
+					{
+						Name:      "args",
+						Type:      strType,
+						IsVarargs: false,
 					},
 				},
 			},
-			Constructors: []*typ.JavaConstructor{},
-			Fields:       []*typ.JavaField{},
-			Type:         typ.JavaTypeClass,
-			Extends:      []*typ.JavaType{},
-			Implements:   []*typ.JavaType{},
-			Visibility:   typ.VisibilityPublic,
 		},
-	}
+		Constructors: []*typ.JavaConstructor{},
+		Fields:       []*typ.JavaField{},
+		Type:         typ.JavaTypeClass,
+		Extends:      []*typ.JavaType{},
+		Implements:   []*typ.JavaType{},
+		Visibility:   typ.VisibilityPublic,
+	})
 
 	assert.Equal(t, expectedTypes, types)
 }
@@ -137,10 +135,9 @@ class MyClass {
 		Visibility: typ.VisibilityPublic,
 	}
 
-	builtins := typ.TypeMap{
-		"String": strType,
-		"int":    intType,
-	}
+	builtins := typ.NewTypeMap()
+	builtins.Add(strType)
+	builtins.Add(intType)
 
 	types, _ := GatherTypes("testfile", tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
@@ -161,55 +158,54 @@ class MyClass {
 		Visibility:   typ.VisibilityPublic,
 	}
 
-	expectedTypes := typ.TypeMap{
-		"MyClass": {
-			Name: "MyClass",
-			Fields: []*typ.JavaField{
-				{
-					Name: "name",
-					Type: strType,
-				},
-				{
-					Name: "asdf",
-					Type: intType,
-				},
-				{
-					Name: "n",
-					Type: nestedType,
-				},
+	expectedTypes := typ.NewTypeMap()
+	expectedTypes.Add(&typ.JavaType{
+		Name: "MyClass",
+		Fields: []*typ.JavaField{
+			{
+				Name: "name",
+				Type: strType,
 			},
-			Constructors: []*typ.JavaConstructor{
-				{
-					Params: []*typ.JavaParameter{
-						{
-							Name: "f",
-							Type: intType,
-						},
+			{
+				Name: "asdf",
+				Type: intType,
+			},
+			{
+				Name: "n",
+				Type: nestedType,
+			},
+		},
+		Constructors: []*typ.JavaConstructor{
+			{
+				Params: []*typ.JavaParameter{
+					{
+						Name: "f",
+						Type: intType,
 					},
 				},
 			},
-			Methods: []*typ.JavaMethod{
-				{
-					Name:       "DoSomething",
-					ReturnType: intType,
-					Params:     []*typ.JavaParameter{},
-				},
-			},
-			Type:       typ.JavaTypeClass,
-			Extends:    []*typ.JavaType{},
-			Implements: []*typ.JavaType{},
-			Visibility: typ.VisibilityPublic,
 		},
-		"Nested": nestedType,
-	}
+		Methods: []*typ.JavaMethod{
+			{
+				Name:       "DoSomething",
+				ReturnType: intType,
+				Params:     []*typ.JavaParameter{},
+			},
+		},
+		Type:       typ.JavaTypeClass,
+		Extends:    []*typ.JavaType{},
+		Implements: []*typ.JavaType{},
+		Visibility: typ.VisibilityPublic,
+	})
+	expectedTypes.Add(nestedType)
 
 	assert.Equal(t, expectedTypes, types)
 }
 
 // nilOutCircularRefs sets backreferences (ParentType) inside a type to be nil
 // so that it's easier to test
-func nilOutCircularRefs(types typ.TypeMap) {
-	for _, ttype := range types {
+func nilOutCircularRefs(types *typ.TypeMap) {
+	for _, ttype := range types.AllTypes() {
 		for _, constructor := range ttype.Constructors {
 			constructor.ParentType = nil
 		}
@@ -240,42 +236,43 @@ enum MyEnum {
 	assert.Equal(t, 0, len(errors))
 
 	strType := &typ.JavaType{Name: "String"}
-	builtins := typ.TypeMap{"String": strType}
+	builtins := typ.NewTypeMap()
+	builtins.Add(strType)
+
 	types, _ := GatherTypes("testfile", tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
 
-	expectedTypes := typ.TypeMap{
-		"MyEnum": &typ.JavaType{
-			Name: "MyEnum",
-			Type: typ.JavaTypeEnum,
-			Constructors: []*typ.JavaConstructor{
-				{
-					Params: []*typ.JavaParameter{
-						{
-							Name: "v",
-							Type: strType,
-						},
+	expectedTypes := typ.NewTypeMap()
+	expectedTypes.Add(&typ.JavaType{
+		Name: "MyEnum",
+		Type: typ.JavaTypeEnum,
+		Constructors: []*typ.JavaConstructor{
+			{
+				Params: []*typ.JavaParameter{
+					{
+						Name: "v",
+						Type: strType,
 					},
 				},
 			},
-			Fields: []*typ.JavaField{
-				{
-					Name: "value",
-					Type: strType,
-				},
-			},
-			Methods: []*typ.JavaMethod{
-				{
-					Name:       "getValue",
-					ReturnType: strType,
-					Params:     []*typ.JavaParameter{},
-				},
-			},
-			Extends:    []*typ.JavaType{},
-			Implements: []*typ.JavaType{},
-			Visibility: typ.VisibilityPublic,
 		},
-	}
+		Fields: []*typ.JavaField{
+			{
+				Name: "value",
+				Type: strType,
+			},
+		},
+		Methods: []*typ.JavaMethod{
+			{
+				Name:       "getValue",
+				ReturnType: strType,
+				Params:     []*typ.JavaParameter{},
+			},
+		},
+		Extends:    []*typ.JavaType{},
+		Implements: []*typ.JavaType{},
+		Visibility: typ.VisibilityPublic,
+	})
 
 	assert.Equal(t, expectedTypes, types)
 }

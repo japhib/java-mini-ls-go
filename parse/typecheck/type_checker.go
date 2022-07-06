@@ -439,16 +439,51 @@ func (tc *typeChecker) ExitMethodCall(ctx *javaparser.MethodCallContext) {
 		tc.handleIdentifier(ident.(*javaparser.IdentifierContext))
 	}
 
+	bounds := loc.ParserRuleContextToBounds(ctx)
+
 	// The identifier should be a method of type __LSPMethod__
 	methodType := tc.expressionStack.Pop().ttype
 	if methodType.Name != "__LSPMethod__" {
 		tc.logger.Error("method is not __LSPMethod__, instead it's: " + methodType.Name)
+		tc.pushExprTypeName("Object", bounds)
+		return
 	}
 
 	// At this point, all expressions should be in order on the expression stack,
 	// from being previously visited.
 	// We just need to pop them off one by one and make sure they are compatible with
-	// the arguments of this method
+	// the arguments of this method.
+	paramTypes := methodType.GenericArgs[2:]
+	// Iterate backwards since we'll pop them off the stack backwards
+	foundArguments := 0
+	for i := len(paramTypes) - 1; i >= 0; i-- {
+		// param is the one in the function def
+		paramType := paramTypes[i]
+
+		// arg is the one in the function call
+		argType := tc.expressionStack.Pop()
+
+		if argType.ttype == nil {
+			tc.addError(TypeError{
+				Loc:     bounds,
+				Message: fmt.Sprintf("Not enough arguments in function call to %s! Expected %d, got %d", ident.GetText(), len(paramTypes), foundArguments),
+			})
+		} else {
+			foundArguments++
+
+			if !argType.ttype.CoercesTo(paramType) {
+				tc.addError(TypeError{
+					Loc:     bounds,
+					Message: fmt.Sprintf("Can't use %s as type %s in function call to %s", argType.ttype.ShortName(), paramType.ShortName(), ident.GetText()),
+				})
+			}
+		}
+	}
+
+	// TODO check for too many arguments without clearing the entire expression stack
+
+	// Now that the function call is resolved, push its return type onto the expression stack
+	tc.pushExprType(methodType.GenericArgs[1], bounds)
 }
 
 func (tc *typeChecker) ExitExpression(ctx *javaparser.ExpressionContext) {

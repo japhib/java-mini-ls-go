@@ -130,7 +130,7 @@ func (st *ScopeTracker) createScope(parent *Scope, ctx antlr.ParserRuleContext) 
 	ret := &Scope{
 		Name:     "",
 		Type:     ScopeTypeUnset,
-		Bounds:   loc.Bounds{},
+		Bounds:   loc.Bounds{}, //nolint:exhaustruct
 		Parent:   parent,
 		Children: make([]*Scope, 0),
 	}

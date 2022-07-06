@@ -3,5 +3,5 @@
 # exit early if a step fails
 set -e
 
-./test.sh
+go test ./...
 ./lint.sh

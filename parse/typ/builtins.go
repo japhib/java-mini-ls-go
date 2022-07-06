@@ -37,6 +37,14 @@ func (tm *TypeMap) Size() int {
 	return len(tm.contents)
 }
 
+func (tm *TypeMap) AllTypes() []*JavaType {
+	ret := make([]*JavaType, 0, len(tm.contents))
+	for _, v := range tm.contents {
+		ret = append(ret, v)
+	}
+	return ret
+}
+
 // The actual built-in types map that we load into
 var builtinTypes *TypeMap
 
@@ -312,7 +320,7 @@ func toArg(arg javaJsonArg) *JavaParameter {
 func getOrCreateBuiltinType(name string) *JavaType {
 	jtype := builtinTypes.Get(name)
 	if jtype == nil {
-		fmt.Println("Creating built-in type: ", name)
+		//fmt.Println("Creating built-in type: ", name)
 		jtype = NewJavaType(name, "", VisibilityPublic, JavaTypeClass, nil)
 		builtinTypes.Add(jtype)
 	}

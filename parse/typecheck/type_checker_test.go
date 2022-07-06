@@ -21,7 +21,10 @@ func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
 
 	strType := &typ.JavaType{Name: "String"}
 	objType := &typ.JavaType{Name: "Object"}
-	builtins := typ.TypeMap{"String": strType, "Object": objType}
+
+	builtins := typ.NewTypeMap()
+	builtins.Add(strType)
+	builtins.Add(objType)
 	typ.AddPrimitiveTypes(builtins)
 
 	return CheckTypes(zaptest.NewLogger(t), tree, "type_checker_test", builtins)
@@ -230,7 +233,7 @@ public class MainClass {
 	}
 
 	assertSymbol(2, 18, typ.JavaSymbolType, "MainClass")
-	assertSymbol(3, 13, typ.JavaSymbolMethod, "add()")
+	assertSymbol(3, 13, typ.JavaSymbolMethod, "add")
 	assertSymbol(4, 6, typ.JavaSymbolLocal, "a")
 	assertSymbol(5, 9, typ.JavaSymbolLocal, "b")
 }
@@ -343,8 +346,77 @@ public class MainClass {
 	assert.Equal(t, []TypeError{{
 		Loc: loc.Bounds{
 			Start: loc.FileLocation{Line: 4, Character: 15},
-			End:   loc.FileLocation{Line: 4, Character: 19},
+			End:   loc.FileLocation{Line: 4, Character: 21},
 		},
 		Message: "Type mismatch: cannot convert from String to int",
+	}}, typeErrors)
+}
+
+func TestCheckTypes_MethodArgumentTypes_Success(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+public class MainClass {
+	public void main() {
+		var gotten = getS("hi", 1);
+	}
+
+	public String getS(String s, int a) {
+		return s;
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{}, typeErrors)
+}
+
+func TestCheckTypes_MethodArgumentTypes_Error(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+public class MainClass {
+	public void main() {
+		var gotten = getS(1, 1, 1);
+	}
+
+	public String getS(int a, String s, int b) {
+		return s;
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{{
+		Loc: loc.Bounds{
+			Start: loc.FileLocation{
+				Line:      4,
+				Character: 15,
+			},
+			End: loc.FileLocation{
+				Line:      4,
+				Character: 28,
+			},
+		},
+		Message: "Can't use int as type String in function call to getS",
+	}}, typeErrors)
+}
+
+func TestCheckTypes_MethodArgumentTypes_ErrorNotEnoughArguments(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+public class MainClass {
+	public void main() {
+		var gotten = getS();
+	}
+
+	public String getS(int a) {
+		return "s";
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{{
+		Loc: loc.Bounds{
+			Start: loc.FileLocation{
+				Line:      4,
+				Character: 15,
+			},
+			End: loc.FileLocation{
+				Line:      4,
+				Character: 21,
+			},
+		},
+		Message: "Not enough arguments in function call to getS! Expected 1, got 0",
 	}}, typeErrors)
 }
