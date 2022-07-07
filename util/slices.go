@@ -40,3 +40,14 @@ func CombineSlices[T any](inputs ...[]T) []T {
 
 	return ret
 }
+
+// Reverse reverses a slice.
+func Reverse[T any](slice []T) []T {
+	ret := make([]T, 0, len(slice))
+
+	for i := len(slice) - 1; i >= 0; i-- {
+		ret = append(ret, slice[i])
+	}
+
+	return ret
+}

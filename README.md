@@ -41,7 +41,7 @@ mix up your `Object` class with `java.lang.Object`
 
 ## Ideas for useful features beyond compile errors
 
-It's great when the IDE can show how to 
+It's great when the IDE can show how to clean up code, especially for beginners. Here are some examples of useful refactors:
 
 - Corrections for common mistakes such as:
   - using == on a String

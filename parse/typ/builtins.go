@@ -209,6 +209,8 @@ func AddPrimitiveTypes(typeMap *TypeMap) {
 	for _, name := range primitives {
 		typeMap.Add(NewPrimitiveType(name))
 	}
+
+	typeMap.Add(NewJavaType(TypeNameLSPAny, "", VisibilityPublic, JavaTypeLSPAny, nil))
 }
 
 func convertJsonTypeType(jsonTypeType string) JavaTypeType {

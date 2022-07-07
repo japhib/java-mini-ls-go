@@ -79,8 +79,21 @@ const (
 	JavaTypeRecord     JavaTypeType = iota
 	JavaTypeAnnotation JavaTypeType = iota
 
-	// A special kind of Java type used internally by the LSP
+	// JavaTypeLSPClass is a special kind of Java type used internally by the LSP to represent classes
+	JavaTypeLSPClass JavaTypeType = iota
+	// JavaTypeLSPConstructor is a special kind of Java type used internally by the LSP to represent constructors
+	JavaTypeLSPConstructor JavaTypeType = iota
+	// JavaTypeLSPMethod is a special kind of Java type used internally by the LSP to represent methods
 	JavaTypeLSPMethod JavaTypeType = iota
+	// JavaTypeLSPAny is a special Java type used internally by the LSP to represent error states, which shouldn't create further type errors
+	JavaTypeLSPAny JavaTypeType = iota
+)
+
+const (
+	TypeNameLSPClass       = "__LSPClass__"
+	TypeNameLSPConstructor = "__LSPConstructor__"
+	TypeNameLSPMethod      = "__LSPMethod__"
+	TypeNameLSPAny         = "__LSPAny__"
 )
 
 var JavaTypeTypeStrs = map[JavaTypeType]string{
@@ -205,13 +218,25 @@ func (jt *JavaType) AddUsage(location loc.CodeLocation) {
 
 func (jt *JavaType) GetType() *JavaType {
 	// Create a new type just for this class
-	t := NewJavaType("__LSPClass__", "", VisibilityPublic, JavaTypeLSPMethod, nil)
+	t := NewJavaType(TypeNameLSPClass, "", VisibilityPublic, JavaTypeLSPClass, nil)
 	t.GenericArgs = []*JavaType{jt}
 	return t
 	// Maybe TODO: If this type already exists, use the existing one, otherwise use the newly created one
 }
 
+func (jt *JavaType) GetClassName() string {
+	if jt.Type == JavaTypeLSPClass {
+		referringType := jt.GenericArgs[0]
+		return referringType.Name
+	}
+	return jt.Name
+}
+
 func (jt *JavaType) LookupMember(name string) JavaSymbol {
+	if jt.Type == JavaTypeLSPClass {
+		return jt.lookupStaticMember(name)
+	}
+
 	// First check fields
 	idx := slices.IndexFunc(jt.Fields, func(field *JavaField) bool {
 		return field.Name == name
@@ -239,6 +264,11 @@ func (jt *JavaType) LookupMember(name string) JavaSymbol {
 
 	// Not found
 	return nil
+}
+
+func (jt *JavaType) lookupStaticMember(name string) JavaSymbol {
+	referringType := jt.GenericArgs[0]
+	return referringType.LookupMember(name)
 }
 
 func (jt *JavaType) String() string {
@@ -289,6 +319,11 @@ var boxedPrimitives = map[string]string{
 
 // CoercesTo says whether a type can be converted to another type without a type cast.
 func (jt *JavaType) CoercesTo(other *JavaType) bool {
+	if jt.Type == JavaTypeLSPAny {
+		// special "any" type coerces to any other type
+		return true
+	}
+
 	if jt == other {
 		return true
 	}
@@ -430,7 +465,7 @@ func (jc *JavaConstructor) AddUsage(location loc.CodeLocation) {
 func (jc *JavaConstructor) GetType() *JavaType {
 	// Create a new type just for this constructor that reflects its receiver type, return type, and parameters
 
-	t := NewJavaType("__LSPConstructor__", "", VisibilityPublic, JavaTypeLSPMethod, nil)
+	t := NewJavaType(TypeNameLSPConstructor, "", VisibilityPublic, JavaTypeLSPConstructor, nil)
 
 	t.GenericArgs = make([]*JavaType, 1+len(jc.Params))
 	// Receiver type (also return type for constructor)
@@ -510,7 +545,7 @@ func (jm *JavaMethod) AddUsage(location loc.CodeLocation) {
 func (jm *JavaMethod) GetType() *JavaType {
 	// Create a new type just for this method that reflects its receiver type, return type, and parameters
 
-	t := NewJavaType("__LSPMethod__", "", VisibilityPublic, JavaTypeLSPMethod, nil)
+	t := NewJavaType(TypeNameLSPMethod, "", VisibilityPublic, JavaTypeLSPMethod, nil)
 
 	t.GenericArgs = make([]*JavaType, 2+len(jm.Params))
 	t.GenericArgs[0] = jm.ParentType

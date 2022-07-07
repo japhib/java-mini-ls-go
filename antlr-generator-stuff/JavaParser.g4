@@ -591,20 +591,18 @@ expressionList
     ;
 
 methodCall
-    : identifier '(' expressionList? ')'
-    | THIS '(' expressionList? ')'
-    | SUPER '(' expressionList? ')'
+    : (THIS | SUPER | identifier) '(' expressionList? ')'
     ;
 
 expression
     : primary
     | expression dotop='.'
       (
-         identifier
-       | methodCall
-       | THIS
+         THIS
        | NEW nonWildcardTypeArguments? innerCreator
        | SUPER superSuffix
+       | methodCall
+       | identifier
        | explicitGenericInvocation
       )
     | expression indexop='[' expression ']'

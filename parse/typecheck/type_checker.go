@@ -70,6 +70,10 @@ type typedDeclarationCtx interface {
 type typedExpression struct {
 	loc   loc.Bounds
 	ttype *typ.JavaType
+
+	// Normally the above fields are all that's necessary. But sometimes we'll push a placeholder value
+	// that doesn't have the above fields, and uses a scope type instead.
+	placeholderScopeType parse.ScopeType
 }
 
 func (te typedExpression) String() string {
@@ -139,8 +143,14 @@ func (tc *typeChecker) lookupType(typeName string) *typ.JavaType {
 		return userType
 	}
 
-	if builtinType := tc.builtins.Get(typeName); builtinType != nil {
-		return builtinType
+	// will return nil if not found
+	return tc.builtins.Get(typeName)
+}
+
+func (tc *typeChecker) lookupOrCreateType(typeName string) *typ.JavaType {
+	found := tc.lookupType(typeName)
+	if found != nil {
+		return found
 	}
 
 	// Type doesn't exist, create it
@@ -159,7 +169,32 @@ func (tc *typeChecker) pushExprType(ttype *typ.JavaType, bounds loc.Bounds) {
 }
 
 func (tc *typeChecker) pushExprTypeName(typeName string, bounds loc.Bounds) {
-	tc.pushExprType(tc.lookupType(typeName), bounds)
+	tc.pushExprType(tc.lookupOrCreateType(typeName), bounds)
+}
+
+func (tc *typeChecker) pushAnyType(bounds loc.Bounds) {
+	tc.pushExprTypeName("any", bounds)
+}
+
+func (tc *typeChecker) pushPlaceholder(scopeType parse.ScopeType) {
+	tc.expressionStack.Push(typedExpression{
+		loc:                  loc.Bounds{}, //nolint:exhaustruct
+		ttype:                nil,
+		placeholderScopeType: scopeType,
+	})
+}
+
+// Pop everything off the expression stack until we get to a particular type of placeholder
+func (tc *typeChecker) popUntilPlaceholderType(scopeType parse.ScopeType) []typedExpression {
+	ret := []typedExpression{}
+	for {
+		popped := tc.expressionStack.Pop()
+		if popped.placeholderScopeType == scopeType {
+			break
+		}
+		ret = append(ret, popped)
+	}
+	return ret
 }
 
 // checkAndAddVariable adds a local variable, while first checking whether the local
@@ -191,7 +226,7 @@ func (tc *typeChecker) getEnclosingType() *typ.JavaType {
 	for i := scopes.Size() - 1; i >= 0; i-- {
 		scope := scopes.TopMinus(i)
 		if scope.Type.IsClassType() {
-			return tc.lookupType(scope.Name)
+			return tc.lookupOrCreateType(scope.Name)
 		}
 	}
 	return nil
@@ -199,7 +234,7 @@ func (tc *typeChecker) getEnclosingType() *typ.JavaType {
 
 func (tc *typeChecker) EnterEveryRule(ctx antlr.ParserRuleContext) {
 	newScope := tc.scopeTracker.CheckEnterScope(ctx)
-	if newScope != nil {
+	if newScope != nil && newScope.Type.IsClassOrMethodType() {
 		bounds := loc.ParserRuleContextToBounds(ctx)
 		symbolForScope := tc.getSymbolFromScope(newScope)
 		typeScope := newTypeCheckingScope(symbolForScope, tc.currentScope, bounds)
@@ -230,7 +265,7 @@ func (tc *typeChecker) EnterEveryRule(ctx antlr.ParserRuleContext) {
 
 func (tc *typeChecker) getSymbolFromScope(scope *parse.Scope) typ.JavaSymbol {
 	if scope.Type.IsClassType() {
-		return tc.lookupType(scope.Name)
+		return tc.lookupOrCreateType(scope.Name)
 	}
 
 	// it's a method, should be inside a class
@@ -251,7 +286,7 @@ func (tc *typeChecker) getSymbolFromScope(scope *parse.Scope) typ.JavaSymbol {
 
 func (tc *typeChecker) ExitEveryRule(ctx antlr.ParserRuleContext) {
 	oldScope := tc.scopeTracker.CheckExitScope(ctx)
-	if oldScope != nil {
+	if oldScope != nil && oldScope.Type.IsClassOrMethodType() {
 		tc.currentScope = tc.currentScope.Parent
 	}
 }
@@ -283,7 +318,7 @@ func (tc *typeChecker) ExitLocalVariableDeclaration(ctx *javaparser.LocalVariabl
 
 // e.g. `String a = "hi"`
 func (tc *typeChecker) handleTypedVariableDecl(ctx typedDeclarationCtx, bounds loc.Bounds, isLocal bool) {
-	ttype := tc.lookupType(ctx.TypeType().GetText())
+	ttype := tc.lookupOrCreateType(ctx.TypeType().GetText())
 
 	// There can be multiple variable declarators
 	varDecls := ctx.VariableDeclarators().(*javaparser.VariableDeclaratorsContext).AllVariableDeclarator()
@@ -388,8 +423,7 @@ func (tc *typeChecker) handleLiteral(ctx *javaparser.LiteralContext) {
 
 	nullLit := ctx.NULL_LITERAL()
 	if nullLit != nil {
-		// TODO add special "any" type that can be coerced to any type
-		tc.pushExprTypeName("Object", bounds)
+		tc.pushAnyType(bounds)
 		return
 	}
 
@@ -422,17 +456,32 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 		return
 	}
 
+	// Is there a type by that name?
+	ttype := tc.lookupType(identName)
+	if ttype != nil {
+		// TODO need to clean up usages of built-in types at some point, otherwise it'll become a memory leak
+		tc.defUsages.Add(loc.CodeLocation{FileUri: tc.currFileURI, Loc: bounds}, ttype, true)
+		tc.pushExprType(ttype.GetType(), bounds)
+		return
+	}
+
 	// Not found
 	tc.addError(TypeError{
 		Loc:     bounds,
 		Message: fmt.Sprintf("Unknown identifier: %s", identName),
 	})
 
-	// The rest of the expression needs something to continue -- we'll assume it's of type Object
-	tc.pushExprType(tc.lookupType("Object"), bounds)
+	// The rest of the expression needs something to continue
+	tc.pushAnyType(bounds)
 }
 
 func (tc *typeChecker) ExitMethodCall(ctx *javaparser.MethodCallContext) {
+	if tc.scopeTracker.ScopeStack.Top().Type == parse.ScopeTypeDotExpr {
+		// If we're a method call inside of a dot expression (e.g. `System.exit()`), don't worry
+		// about it, since it'll get handled by handleDotOperator()
+		return
+	}
+
 	// TODO handle this()/super() method calls (allowed in constructors only I believe)
 	ident := ctx.Identifier()
 	if ident != nil {
@@ -445,9 +494,15 @@ func (tc *typeChecker) ExitMethodCall(ctx *javaparser.MethodCallContext) {
 	methodType := tc.expressionStack.Pop().ttype
 	if methodType.Name != "__LSPMethod__" {
 		tc.logger.Error("method is not __LSPMethod__, instead it's: " + methodType.Name)
-		tc.pushExprTypeName("Object", bounds)
+		tc.pushAnyType(bounds)
 		return
 	}
+
+	tc.handleMethodCall(ctx, methodType, ident.GetText())
+}
+
+func (tc *typeChecker) handleMethodCall(ctx *javaparser.MethodCallContext, methodType *typ.JavaType, methodName string) {
+	bounds := loc.ParserRuleContextToBounds(ctx)
 
 	// At this point, all expressions should be in order on the expression stack,
 	// from being previously visited.
@@ -466,7 +521,7 @@ func (tc *typeChecker) ExitMethodCall(ctx *javaparser.MethodCallContext) {
 		if argType.ttype == nil {
 			tc.addError(TypeError{
 				Loc:     bounds,
-				Message: fmt.Sprintf("Not enough arguments in function call to %s! Expected %d, got %d", ident.GetText(), len(paramTypes), foundArguments),
+				Message: fmt.Sprintf("Not enough arguments in function call to %s! Expected %d, got %d", methodName, len(paramTypes), foundArguments),
 			})
 		} else {
 			foundArguments++
@@ -474,7 +529,7 @@ func (tc *typeChecker) ExitMethodCall(ctx *javaparser.MethodCallContext) {
 			if !argType.ttype.CoercesTo(paramType) {
 				tc.addError(TypeError{
 					Loc:     bounds,
-					Message: fmt.Sprintf("Can't use %s as type %s in function call to %s", argType.ttype.ShortName(), paramType.ShortName(), ident.GetText()),
+					Message: fmt.Sprintf("Can't use %s as type %s in function call to %s", argType.ttype.ShortName(), paramType.ShortName(), methodName),
 				})
 			}
 		}
@@ -486,7 +541,19 @@ func (tc *typeChecker) ExitMethodCall(ctx *javaparser.MethodCallContext) {
 	tc.pushExprType(methodType.GenericArgs[1], bounds)
 }
 
+func (tc *typeChecker) EnterExpression(ctx *javaparser.ExpressionContext) {
+	dotToken := ctx.GetDotop()
+	if dotToken != nil {
+		tc.pushPlaceholder(parse.ScopeTypeDotExpr)
+	}
+}
+
 func (tc *typeChecker) ExitExpression(ctx *javaparser.ExpressionContext) {
+	dotToken := ctx.GetDotop()
+	if dotToken != nil {
+		tc.handleDotOperator(ctx)
+	}
+
 	bopToken := ctx.GetBop()
 	if bopToken != nil {
 		bop := bopToken.GetText()
@@ -494,7 +561,83 @@ func (tc *typeChecker) ExitExpression(ctx *javaparser.ExpressionContext) {
 	}
 }
 
+func (tc *typeChecker) handleDotOperator(ctx *javaparser.ExpressionContext) {
+	// When entering the dot operator expression, we pushed a placeholder onto the stack.
+	// Now we pop off everything until that placeholder so we can deal with it in a different order.
+	exprs := tc.popUntilPlaceholderType(parse.ScopeTypeDotExpr)
+
+	left := exprs[len(exprs)-1]
+
+	ident := ctx.Identifier()
+	if ident != nil {
+		// We're referring to a field (such as `System.in`)
+		identName := ident.GetText()
+		member := left.ttype.LookupMember(identName)
+
+		var memberType *typ.JavaType
+
+		if member == nil {
+			tc.addError(TypeError{
+				Loc:     loc.ParserRuleContextToBounds(ident),
+				Message: fmt.Sprintf("Can't find member named %s of type %s", identName, left.ttype.ShortName()),
+			})
+			memberType = tc.lookupOrCreateType("any")
+		} else {
+			memberType = member.GetType()
+		}
+
+		tc.pushExprType(memberType, loc.ParserRuleContextToBounds(ctx))
+		return
+	}
+
+	methodCallI := ctx.MethodCall()
+	if methodCallI != nil {
+		// We're referring to a method (such as `System.exit()`).
+		methodCall := methodCallI.(*javaparser.MethodCallContext)
+
+		ident = methodCall.Identifier()
+		if ident == nil {
+			// TODO handle this/super
+			return
+		}
+
+		identName := ident.GetText()
+		member := left.ttype.LookupMember(identName)
+
+		if member == nil {
+			tc.addError(TypeError{
+				Loc:     loc.ParserRuleContextToBounds(ident),
+				Message: fmt.Sprintf("Can't find member named %s on type %s", identName, left.ttype.ShortName()),
+			})
+			tc.pushAnyType(loc.ParserRuleContextToBounds(ident))
+			return
+		}
+
+		methodType := member.GetType()
+		if methodType.Type != typ.JavaTypeLSPMethod {
+			bounds := loc.ParserRuleContextToBounds(methodCall)
+			tc.addError(TypeError{
+				Loc:     bounds,
+				Message: fmt.Sprintf("%s is not callable", methodType.FullName()),
+			})
+			tc.pushAnyType(bounds)
+			return
+		}
+
+		// The args were pushed onto the stack after `left`. handleMethodCall is going to typecheck
+		// them, but it expects them back on the stack (in reverse order).
+		args := util.Reverse(exprs[:len(exprs)-1])
+		for _, arg := range args {
+			tc.expressionStack.Push(arg)
+		}
+		tc.handleMethodCall(methodCall, methodType, left.ttype.GetClassName()+"."+identName)
+	}
+
+	// TODO handle other possibilities
+}
+
 // Binary operators that take in two numbers and return a number
+var concatBop = util.SetFromValues("+", "+=")
 var arithmeticBops = util.SetFromValues("+", "-", "*", "/", "%", "+=", "-=", "*=", "/=", "%=")
 var bitshiftBops = util.SetFromValues(">>", ">>>", "<<", ">>=", ">>>=", "<<=")
 var comparisonBops = util.SetFromValues("<", ">", "<=", ">=")
@@ -513,7 +656,7 @@ func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds loc.Bounds)
 		})
 		tc.expressionStack.Push(typedExpression{
 			loc:   exprBounds,
-			ttype: tc.lookupType("Object"),
+			ttype: tc.lookupOrCreateType("any"),
 		})
 	}
 	if right.ttype == nil {
@@ -525,18 +668,25 @@ func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds loc.Bounds)
 		return
 	}
 
-	alwaysReturnsBoolean := func(_ *typ.JavaType, _ *typ.JavaType) *typ.JavaType {
-		return tc.lookupType("boolean")
+	alwaysReturnString := func(_ *typ.JavaType, _ *typ.JavaType) *typ.JavaType {
+		return tc.lookupOrCreateType("String")
+	}
+	alwaysReturnBoolean := func(_ *typ.JavaType, _ *typ.JavaType) *typ.JavaType {
+		return tc.lookupOrCreateType("boolean")
 	}
 
 	opType := "unknown"
 	assertionFunc := emptyTypeAssertion
-	returnTypeFunc := alwaysReturnsBoolean
+	returnTypeFunc := alwaysReturnBoolean
 	// Some of the operators can contain = but are not assignment operators
 	definitelyNotAssignment := false
 
 	// Actually do the bop checking
-	if arithmeticBops.Contains(bop) {
+	if concatBop.Contains(bop) && (right.ttype.Name == "String" || left.ttype.Name == "String") {
+		opType = "concatenation"
+		assertionFunc = assertIsNumericOrString
+		returnTypeFunc = alwaysReturnString
+	} else if arithmeticBops.Contains(bop) {
 		opType = "arithmetic"
 		assertionFunc = assertIsNumeric
 		returnTypeFunc = determineArithmeticBopReturnType
@@ -552,16 +702,16 @@ func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds loc.Bounds)
 		definitelyNotAssignment = true
 		opType = "comparison"
 		assertionFunc = assertIsNumeric
-		returnTypeFunc = alwaysReturnsBoolean
+		returnTypeFunc = alwaysReturnBoolean
 	} else if equalityBops.Contains(bop) {
 		definitelyNotAssignment = true
 		opType = "equality"
 		assertionFunc = emptyTypeAssertion
-		returnTypeFunc = alwaysReturnsBoolean
+		returnTypeFunc = alwaysReturnBoolean
 	} else if booleanBops.Contains(bop) {
 		opType = "boolean"
 		assertionFunc = assertIsBoolean
-		returnTypeFunc = alwaysReturnsBoolean
+		returnTypeFunc = alwaysReturnBoolean
 	}
 
 	var returnType *typ.JavaType
@@ -601,6 +751,10 @@ func (tc *typeChecker) determineBopReturnType(left, right typedExpression, opTyp
 	return returnTypeFunc(left.ttype, right.ttype)
 }
 
+func assertIsNumericOrString(ttype *typ.JavaType) bool {
+	return ttype.Name == "String" || assertIsNumeric(ttype)
+}
+
 var numericTypes = util.SetFromValues("byte", "char", "short", "int", "long", "float", "double")
 
 func assertIsNumeric(ttype *typ.JavaType) bool {
@@ -629,15 +783,6 @@ var integralTypeWidths = []string{"byte", "short", "char", "int", "long"}
 // TODO this is for general arithmetic operators, it may be different for bitwise/bitshift ones
 // (e.g. right now this accepts Strings)
 func determineArithmeticBopReturnType(left *typ.JavaType, right *typ.JavaType) *typ.JavaType {
-	// If either left or right is a String, it's a string concatenation
-	// so the return value is also a String
-	if left.Name == "String" {
-		return left
-	}
-	if right.Name == "String" {
-		return right
-	}
-
 	// If either left or right is a double, the return value is a double
 	if left.Name == "double" {
 		return left

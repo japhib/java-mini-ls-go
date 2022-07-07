@@ -11,21 +11,13 @@ import (
 
 func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
 	// Make sure to load built-in types
-	_, err := typ.LoadBuiltinTypes()
+	builtins, err := typ.LoadBuiltinTypes()
 	if err != nil {
 		t.Fatalf("Error loading builtin types: %s", err.Error())
 	}
 
 	tree, parseErrors := parse.Parse(code)
 	assert.Equal(t, 0, len(parseErrors))
-
-	strType := &typ.JavaType{Name: "String"}
-	objType := &typ.JavaType{Name: "Object"}
-
-	builtins := typ.NewTypeMap()
-	builtins.Add(strType)
-	builtins.Add(objType)
-	typ.AddPrimitiveTypes(builtins)
 
 	return CheckTypes(zaptest.NewLogger(t), tree, "type_checker_test", builtins)
 }
@@ -419,4 +411,61 @@ public class MainClass {
 		},
 		Message: "Not enough arguments in function call to getS! Expected 1, got 0",
 	}}, typeErrors)
+}
+
+func TestCheckTypes_DotOperator_Field(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+class Something {
+	int a;
+}
+
+class MainClass {
+	void main() {
+		Something s = new Something();
+		var a = s.a;
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{}, typeErrors)
+}
+
+func TestCheckTypes_DotOperator_Method(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+class MainClass {
+	void main() {
+		var a = System.in;
+		System.out.println();
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{}, typeErrors)
+}
+
+func TestCheckTypes_DotOperator_Method_OneArgument(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+class MainClass {
+	void main() {
+		var a = System.in;
+		System.out.println("hi");
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{}, typeErrors)
+}
+
+func TestCheckTypes_DotOperator_Method_SeveralArguments(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+class HelperClass {
+	static void print3things(String a, int b, int c) {
+		System.out.println(a + b + c);
+	}
+}
+
+class MainClass {
+	void main() {
+		HelperClass.print3things("asdf", 1, 2);
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{}, typeErrors)
 }

@@ -69,7 +69,7 @@ func (tg *typeGatherer) setSecondPass() {
 
 func (tg *typeGatherer) EnterEveryRule(ctx antlr.ParserRuleContext) {
 	newScope := tg.scopeTracker.CheckEnterScope(ctx)
-	if newScope != nil {
+	if newScope != nil && newScope.Type.IsClassOrMethodType() {
 		if tg.isFirstPass {
 			tg.handleNewScopeFirstPass(newScope, ctx)
 		} else {

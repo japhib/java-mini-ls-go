@@ -13,18 +13,45 @@ import (
 type ScopeType int
 
 const (
-	ScopeTypeUnset                  ScopeType = iota
-	ScopeTypeAnnotationType         ScopeType = iota
-	ScopeTypeClass                  ScopeType = iota
+	ScopeTypeUnset ScopeType = iota
+
+	// class types
+
+	ScopeTypeAnnotationType ScopeType = iota
+	ScopeTypeClass          ScopeType = iota
+	ScopeTypeEnum           ScopeType = iota
+	ScopeTypeRecord         ScopeType = iota
+	ScopeTypeInterface      ScopeType = iota
+
+	// method types
+
 	ScopeTypeConstructor            ScopeType = iota
-	ScopeTypeEnum                   ScopeType = iota
 	ScopeTypeGenericConstructor     ScopeType = iota
 	ScopeTypeGenericInterfaceMethod ScopeType = iota
 	ScopeTypeGenericMethod          ScopeType = iota
-	ScopeTypeInterface              ScopeType = iota
 	ScopeTypeInterfaceMethod        ScopeType = iota
 	ScopeTypeMethod                 ScopeType = iota
-	ScopeTypeRecord                 ScopeType = iota
+
+	// statement types
+
+	ScopeTypeBlock     ScopeType = iota
+	ScopeTypeStatement ScopeType = iota
+
+	// expression types
+
+	ScopeTypeExpression     ScopeType = iota
+	ScopeTypePrimary        ScopeType = iota
+	ScopeTypeDotExpr        ScopeType = iota
+	ScopeTypeIndexExpr      ScopeType = iota
+	ScopeTypeMethodCallExpr ScopeType = iota
+	ScopeTypeNewExpr        ScopeType = iota
+	ScopeTypeCastExpr       ScopeType = iota
+	ScopeTypeUnaryExpr      ScopeType = iota
+	ScopeTypeBinaryExpr     ScopeType = iota
+	ScopeTypeTernaryExpr    ScopeType = iota
+	ScopeTypeLambdaExpr     ScopeType = iota
+	ScopeTypeSwitchExpr     ScopeType = iota
+	ScopeTypeExprOther      ScopeType = iota
 )
 
 var classTypes = []ScopeType{
@@ -44,12 +71,44 @@ var methodTypes = []ScopeType{
 	ScopeTypeMethod,
 }
 
+var statementTypes = []ScopeType{
+	ScopeTypeBlock,
+	ScopeTypeStatement,
+}
+
+var expressionTypes = []ScopeType{
+	ScopeTypeExpression,
+	ScopeTypePrimary,
+	ScopeTypeDotExpr,
+	ScopeTypeIndexExpr,
+	ScopeTypeMethodCallExpr,
+	ScopeTypeNewExpr,
+	ScopeTypeCastExpr,
+	ScopeTypeUnaryExpr,
+	ScopeTypeBinaryExpr,
+	ScopeTypeTernaryExpr,
+	ScopeTypeLambdaExpr,
+	ScopeTypeSwitchExpr,
+}
+
 func (st ScopeType) IsClassType() bool {
 	return slices.Contains(classTypes, st)
 }
 
 func (st ScopeType) IsMethodType() bool {
 	return slices.Contains(methodTypes, st)
+}
+
+func (st ScopeType) IsClassOrMethodType() bool {
+	return st.IsClassType() || st.IsMethodType()
+}
+
+func (st ScopeType) IsStatementType() bool {
+	return slices.Contains(statementTypes, st)
+}
+
+func (st ScopeType) IsExpressionType() bool {
+	return slices.Contains(expressionTypes, st)
 }
 
 type Scope struct {
@@ -104,15 +163,10 @@ func (st *ScopeTracker) CurrScopeName() string {
 
 func (st *ScopeTracker) shouldCreateScope(ruleType int) bool {
 	switch ruleType {
+
+	// class types
+
 	case javaparser.JavaParserRULE_classDeclaration:
-		return true
-	case javaparser.JavaParserRULE_methodDeclaration:
-		return true
-	case javaparser.JavaParserRULE_genericMethodDeclaration:
-		return true
-	case javaparser.JavaParserRULE_constructorDeclaration:
-		return true
-	case javaparser.JavaParserRULE_genericConstructorDeclaration:
 		return true
 	case javaparser.JavaParserRULE_interfaceDeclaration:
 		return true
@@ -121,6 +175,29 @@ func (st *ScopeTracker) shouldCreateScope(ruleType int) bool {
 	case javaparser.JavaParserRULE_annotationTypeDeclaration:
 		return true
 	case javaparser.JavaParserRULE_recordDeclaration:
+		return true
+
+	// method types
+
+	case javaparser.JavaParserRULE_methodDeclaration:
+		return true
+	case javaparser.JavaParserRULE_genericMethodDeclaration:
+		return true
+	case javaparser.JavaParserRULE_constructorDeclaration:
+		return true
+	case javaparser.JavaParserRULE_genericConstructorDeclaration:
+		return true
+
+	// statement types
+
+	case javaparser.JavaParserRULE_block:
+		return true
+	case javaparser.JavaParserRULE_statement:
+		return true
+
+	// expression types
+
+	case javaparser.JavaParserRULE_expression:
 		return true
 	}
 	return false
@@ -135,50 +212,57 @@ func (st *ScopeTracker) createScope(parent *Scope, ctx antlr.ParserRuleContext) 
 		Children: make([]*Scope, 0),
 	}
 
+	var subCtx javaparser.IIdentifierContext = nil
+
 	switch ctx.GetRuleIndex() {
 	case javaparser.JavaParserRULE_classDeclaration:
 		ret.Type = ScopeTypeClass
-		subCtx := ctx.(*javaparser.ClassDeclarationContext).Identifier()
-		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
+		subCtx = ctx.(*javaparser.ClassDeclarationContext).Identifier()
 	case javaparser.JavaParserRULE_methodDeclaration:
 		ret.Type = ScopeTypeMethod
-		subCtx := ctx.(*javaparser.MethodDeclarationContext).Identifier()
-		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
+		subCtx = ctx.(*javaparser.MethodDeclarationContext).Identifier()
 	case javaparser.JavaParserRULE_genericMethodDeclaration:
 		ret.Type = ScopeTypeGenericMethod
-		subCtx := ctx.(*javaparser.GenericMethodDeclarationContext).MethodDeclaration().(*javaparser.MethodDeclarationContext).Identifier()
-		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
+		subCtx = ctx.(*javaparser.GenericMethodDeclarationContext).MethodDeclaration().(*javaparser.MethodDeclarationContext).Identifier()
 	case javaparser.JavaParserRULE_interfaceMethodDeclaration:
 		ret.Type = ScopeTypeInterfaceMethod
-		subCtx := ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext).Identifier()
-		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
+		subCtx = ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext).Identifier()
 	case javaparser.JavaParserRULE_genericInterfaceMethodDeclaration:
 		ret.Type = ScopeTypeGenericInterfaceMethod
-		subCtx := ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext).Identifier()
-		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
+		subCtx = ctx.(*javaparser.InterfaceMethodDeclarationContext).InterfaceCommonBodyDeclaration().(*javaparser.InterfaceCommonBodyDeclarationContext).Identifier()
 	case javaparser.JavaParserRULE_constructorDeclaration:
 		ret.Type = ScopeTypeConstructor
-		subCtx := ctx.(*javaparser.ConstructorDeclarationContext).Identifier()
-		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
+		subCtx = ctx.(*javaparser.ConstructorDeclarationContext).Identifier()
 	case javaparser.JavaParserRULE_genericConstructorDeclaration:
 		ret.Type = ScopeTypeGenericConstructor
-		subCtx := ctx.(*javaparser.GenericConstructorDeclarationContext).ConstructorDeclaration().(*javaparser.ConstructorDeclarationContext).Identifier()
-		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
+		subCtx = ctx.(*javaparser.GenericConstructorDeclarationContext).ConstructorDeclaration().(*javaparser.ConstructorDeclarationContext).Identifier()
 	case javaparser.JavaParserRULE_interfaceDeclaration:
 		ret.Type = ScopeTypeInterface
-		subCtx := ctx.(*javaparser.InterfaceDeclarationContext).Identifier()
-		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
+		subCtx = ctx.(*javaparser.InterfaceDeclarationContext).Identifier()
 	case javaparser.JavaParserRULE_enumDeclaration:
 		ret.Type = ScopeTypeEnum
-		subCtx := ctx.(*javaparser.EnumDeclarationContext).Identifier()
-		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
+		subCtx = ctx.(*javaparser.EnumDeclarationContext).Identifier()
 	case javaparser.JavaParserRULE_annotationTypeDeclaration:
 		ret.Type = ScopeTypeAnnotationType
-		subCtx := ctx.(*javaparser.AnnotationTypeDeclarationContext).Identifier()
-		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
+		subCtx = ctx.(*javaparser.AnnotationTypeDeclarationContext).Identifier()
 	case javaparser.JavaParserRULE_recordDeclaration:
 		ret.Type = ScopeTypeRecord
-		subCtx := ctx.(*javaparser.RecordDeclarationContext).Identifier()
+		subCtx = ctx.(*javaparser.RecordDeclarationContext).Identifier()
+
+	// Anonymous scopes
+
+	case javaparser.JavaParserRULE_block:
+		ret.Type = ScopeTypeBlock
+		ret.Bounds = loc.ParserRuleContextToBounds(ctx)
+	case javaparser.JavaParserRULE_statement:
+		ret.Type = ScopeTypeStatement
+		ret.Bounds = loc.ParserRuleContextToBounds(ctx)
+	case javaparser.JavaParserRULE_expression:
+		ret.Type = expressionTypeForCtx(ctx.(*javaparser.ExpressionContext))
+		ret.Bounds = loc.ParserRuleContextToBounds(ctx)
+	}
+
+	if subCtx != nil {
 		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	}
 
@@ -187,4 +271,41 @@ func (st *ScopeTracker) createScope(parent *Scope, ctx antlr.ParserRuleContext) 
 
 func nameAndBoundsForCtx(ident javaparser.IIdentifierContext) (string, loc.Bounds) {
 	return ident.GetText(), loc.ParserRuleContextToBounds(ident)
+}
+
+func expressionTypeForCtx(ctx *javaparser.ExpressionContext) ScopeType {
+	if ctx.Primary() != nil {
+		return ScopeTypePrimary
+	}
+	if ctx.GetDotop() != nil {
+		return ScopeTypeDotExpr
+	}
+	if ctx.GetIndexop() != nil {
+		return ScopeTypeIndexExpr
+	}
+	if ctx.MethodCall() != nil {
+		return ScopeTypeMethodCallExpr
+	}
+	if ctx.NEW() != nil {
+		return ScopeTypeNewExpr
+	}
+	if ctx.CastExpr() != nil {
+		return ScopeTypeCastExpr
+	}
+	if ctx.GetPostfix() != nil || ctx.GetPrefix() != nil {
+		return ScopeTypeUnaryExpr
+	}
+	if ctx.GetBop() != nil {
+		return ScopeTypeBinaryExpr
+	}
+	if ctx.GetTern() != nil {
+		return ScopeTypeTernaryExpr
+	}
+	if ctx.LambdaExpression() != nil {
+		return ScopeTypeLambdaExpr
+	}
+	if ctx.SwitchExpression() != nil {
+		return ScopeTypeSwitchExpr
+	}
+	return ScopeTypeExprOther
 }
