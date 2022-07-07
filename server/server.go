@@ -26,7 +26,7 @@ type JavaLS struct {
 
 	documentTextCache *util.SyncMap[string, protocol.TextDocumentItem]
 	symbols           *util.SyncMap[string, []*sym.CodeSymbol]
-	scopes            *util.SyncMap[string, typecheck.TypeCheckingScope]
+	scopes            *util.SyncMap[string, *typecheck.TypeCheckingScope]
 	defUsages         *util.SyncMap[string, *typecheck.DefinitionsUsagesLookup]
 	builtinTypes      *typ.TypeMap
 
@@ -44,7 +44,7 @@ func NewServer(ctx context.Context, logger *zap.Logger) *JavaLS {
 		client:               nil,
 		documentTextCache:    util.NewSyncMap[string, protocol.TextDocumentItem](),
 		symbols:              util.NewSyncMap[string, []*sym.CodeSymbol](),
-		scopes:               util.NewSyncMap[string, typecheck.TypeCheckingScope](),
+		scopes:               util.NewSyncMap[string, *typecheck.TypeCheckingScope](),
 		defUsages:            util.NewSyncMap[string, *typecheck.DefinitionsUsagesLookup](),
 		builtinTypes:         typ.NewTypeMap(),
 		diagnosticsPublisher: &RealDiagnosticsPublisher{},
@@ -89,6 +89,10 @@ func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams
 			HoverProvider:          true,
 			ReferencesProvider:     true,
 			DefinitionProvider:     true,
+			CompletionProvider: &protocol.CompletionOptions{
+				ResolveProvider:   false,
+				TriggerCharacters: []string{"."},
+			},
 		},
 		ServerInfo: nil,
 	}, nil
@@ -309,4 +313,59 @@ func (j *JavaLS) Definition(_ context.Context, params *protocol.DefinitionParams
 	}
 
 	return []protocol.Location{codeLocationToLSPLocation(*symbol.GetDefinition())}, nil
+}
+
+func (j *JavaLS) Completion(_ context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
+	textOnLine, err := j.getTextOnLine(string(params.TextDocument.URI), int(params.Position.Line))
+	if err != nil {
+		return nil, err
+	}
+	// go backwards from the current character to see if this was triggered by a dot `.`, and if so,
+	// what's the symbol on the left of the dot
+	dotIdx := -1
+	for i := int(params.Position.Character) - 1; i >= 0; i-- {
+		if textOnLine[i] == '.' {
+			dotIdx = i
+			break
+		}
+	}
+	if dotIdx != -1 {
+		j.log.Info("found a dot")
+
+		// We've got a dot. What is the symbol on the left of the dot?
+		defUsages, ok := j.defUsages.Get(string(params.TextDocument.URI))
+		if ok {
+			leftOfDot := defUsages.Lookup(loc.FileLocation{
+				Line:      int(params.Position.Line + 1),
+				Character: int(params.Position.Character),
+			})
+			if leftOfDot != nil {
+				allMembers := leftOfDot.GetType().AllMembers()
+				j.log.Info(fmt.Sprintf("dot members: %d", len(allMembers)))
+				return symbolsToCompletionList(allMembers), nil
+			}
+		}
+	}
+
+	fileScopes, ok := j.scopes.Get(string(params.TextDocument.URI))
+	if ok {
+		scope := fileScopes.LookupScopeFor(loc.FileLocation{
+			Line:      int(params.Position.Line + 1),
+			Character: int(params.Position.Character),
+		})
+		j.log.Info(fmt.Sprintf("non-dot members: %d", len(scope.AllSymbols())))
+		return symbolsToCompletionList(scope.AllSymbols()), nil
+	}
+
+	return nil, nil
+}
+
+func symbolsToCompletionList(symbols []typ.JavaSymbol) *protocol.CompletionList {
+	completions := util.Map(symbols, func(s typ.JavaSymbol) protocol.CompletionItem {
+		return protocol.CompletionItem{Label: s.ShortName()} //nolint:exhaustruct
+	})
+	return &protocol.CompletionList{
+		IsIncomplete: false,
+		Items:        completions,
+	}
 }

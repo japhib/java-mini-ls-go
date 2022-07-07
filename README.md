@@ -35,6 +35,7 @@ were simply deemed as lower priority for a minimal demo-style implementation.
 
 - Ignores generics
 - Ignores dependencies
+- Doesn't check whether static/non-static things are used properly
 - Doesn't typecheck constructors
 - Definition/usages finder gets confused by method overloads
 - Only loads [java.base](https://docs.oracle.com/en/java/javase/17/docs/api/java.base/module-summary.html) module of 

@@ -10,16 +10,16 @@ type TypeCheckingScope struct {
 	Locals   map[string]*typ.JavaLocal
 	Location loc.Bounds
 	Parent   *TypeCheckingScope
-	Children []TypeCheckingScope
+	Children []*TypeCheckingScope
 }
 
-func newTypeCheckingScope(symbol typ.JavaSymbol, parent *TypeCheckingScope, bounds loc.Bounds) TypeCheckingScope {
-	newScope := TypeCheckingScope{
+func newTypeCheckingScope(symbol typ.JavaSymbol, parent *TypeCheckingScope, bounds loc.Bounds) *TypeCheckingScope {
+	newScope := &TypeCheckingScope{
 		Symbol:   symbol,
 		Locals:   make(map[string]*typ.JavaLocal),
 		Location: bounds,
 		Parent:   parent,
-		Children: []TypeCheckingScope{},
+		Children: []*TypeCheckingScope{},
 	}
 
 	if parent != nil {
@@ -71,4 +71,31 @@ func (tcs *TypeCheckingScope) LookupScopeFor(location loc.FileLocation) *TypeChe
 	// If we've gotten this far, there are no children, or none of the children
 	// match. So the current scope is the best match.
 	return tcs
+}
+
+// AllSymbols returns a list of all symbols that are relevant to the current scope, including
+// symbols from parent scopes.
+//
+// Used by LSP auto-completion provider.
+func (tcs *TypeCheckingScope) AllSymbols() []typ.JavaSymbol {
+	var symbols []typ.JavaSymbol
+
+	for _, l := range tcs.Locals {
+		symbols = append(symbols, l)
+	}
+
+	if ttype, ok := tcs.Symbol.(*typ.JavaType); ok {
+		for _, f := range ttype.Fields {
+			symbols = append(symbols, f)
+		}
+		for _, m := range ttype.Methods {
+			symbols = append(symbols, m)
+		}
+	}
+
+	if tcs.Parent != nil {
+		symbols = append(symbols, tcs.Parent.AllSymbols()...)
+	}
+
+	return symbols
 }

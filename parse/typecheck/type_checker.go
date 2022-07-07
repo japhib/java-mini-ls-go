@@ -97,7 +97,7 @@ func (te *TypeError) ToDiagnostic() protocol.Diagnostic {
 type TypeCheckResult struct {
 	TypeErrors      []TypeError
 	DefUsagesLookup *DefinitionsUsagesLookup
-	RootScope       TypeCheckingScope
+	RootScope       *TypeCheckingScope
 }
 
 // CheckTypes is the entrypoint for all type-related analysis. First calls GatherTypes and then checkTypes,
@@ -147,7 +147,7 @@ type typeChecker struct {
 	builtins        *typ.TypeMap
 	errors          []TypeError
 	scopeTracker    *parse.ScopeTracker
-	rootScope       TypeCheckingScope
+	rootScope       *TypeCheckingScope
 	currentScope    *TypeCheckingScope
 	defUsages       *DefinitionsUsagesLookup
 
@@ -187,7 +187,7 @@ func newTypeChecker(logger *zap.Logger, fileURI string, fileVersion int, userTyp
 		errors:                 make([]TypeError, 0),
 		scopeTracker:           parse.NewScopeTracker(),
 		rootScope:              rootScope,
-		currentScope:           &rootScope,
+		currentScope:           rootScope,
 		defUsages:              defUsages,
 		expressionStack:        util.NewStack[typedExpression](),
 	}
@@ -331,7 +331,7 @@ func (tc *typeChecker) EnterEveryRule(ctx antlr.ParserRuleContext) {
 			}
 		}
 
-		tc.currentScope = &typeScope
+		tc.currentScope = typeScope
 	}
 }
 

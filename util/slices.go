@@ -51,3 +51,19 @@ func Reverse[T any](slice []T) []T {
 
 	return ret
 }
+
+func Keys[K comparable, V any](m map[K]V) []K {
+	ret := []K{}
+	for k, _ := range m {
+		ret = append(ret, k)
+	}
+	return ret
+}
+
+func Values[K comparable, V any](m map[K]V) []V {
+	ret := []V{}
+	for _, v := range m {
+		ret = append(ret, v)
+	}
+	return ret
+}

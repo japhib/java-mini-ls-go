@@ -35,10 +35,6 @@ func (j *JavaLS) ColorPresentation(ctx context.Context, params *protocol.ColorPr
 	panic("ColorPresentation unimplemented")
 }
 
-func (j *JavaLS) Completion(ctx context.Context, params *protocol.CompletionParams) (*protocol.CompletionList, error) {
-	panic("Completion unimplemented")
-}
-
 func (j *JavaLS) CompletionResolve(ctx context.Context, params *protocol.CompletionItem) (*protocol.CompletionItem, error) {
 	panic("CompletionResolve unimplemented")
 }

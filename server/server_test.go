@@ -452,3 +452,73 @@ func TestServer_MultipleUsagesAndDef(t *testing.T) {
 		},
 	}, result)
 }
+
+func TestServer_Completion(t *testing.T) {
+	ctx, cancel := testCtx()
+	defer cancel()
+	jls := testServer(t, ctx)
+
+	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: createTextDocument("test_location", `public class Main {
+	public void main() {
+		int Abcdef = 0;
+		Abc
+	}
+}`)})
+	assert.Nil(t, err)
+
+	completionList, err := jls.Completion(ctx, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: uri.New("test_location"),
+			},
+			Position: protocol.Position{
+				Line:      3,
+				Character: 5,
+			},
+		},
+	})
+	assert.Nil(t, err)
+
+	assert.Equal(t, 2, len(completionList.Items))
+	assert.Equal(t, "Abcdef", completionList.Items[0].Label)
+	assert.Equal(t, "main", completionList.Items[1].Label)
+}
+
+func TestServer_Completion_Dot(t *testing.T) {
+	ctx, cancel := testCtx()
+	defer cancel()
+	jls := testServer(t, ctx)
+
+	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: createTextDocument("test_location", `public class Main {
+	public void main() {
+		System.out.
+	}
+}`)})
+	assert.Nil(t, err)
+
+	completionList, err := jls.Completion(ctx, &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: uri.New("test_location"),
+			},
+			Position: protocol.Position{
+				Line:      2,
+				Character: 13,
+			},
+		},
+	})
+	assert.Nil(t, err)
+
+	// Should return "out" (as in System.out) as one of the results
+
+	assert.NotEqual(t, 0, len(completionList.Items))
+	foundOut := false
+	for _, item := range completionList.Items {
+		if item.Label == "out" {
+			foundOut = true
+		}
+	}
+	assert.True(t, foundOut)
+}

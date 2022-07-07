@@ -261,6 +261,31 @@ func (jt *JavaType) GetClassName() string {
 	return jt.Name
 }
 
+func (jt *JavaType) AllMembers() []JavaSymbol {
+	if jt.Type == JavaTypeLSPClass {
+		referringType := jt.GenericArgs[0]
+		return referringType.AllMembers()
+	}
+
+	ret := []JavaSymbol{}
+
+	for _, f := range jt.Fields {
+		ret = append(ret, f)
+	}
+	for _, m := range jt.Methods {
+		ret = append(ret, m)
+	}
+
+	// Go to parent class/interfaces and add their members too
+	for _, supertype := range jt.Extends {
+		for _, m := range supertype.AllMembers() {
+			ret = append(ret, m)
+		}
+	}
+
+	return ret
+}
+
 func (jt *JavaType) LookupMember(name string) JavaSymbol {
 	if jt.Type == JavaTypeLSPClass {
 		return jt.lookupStaticMember(name)
@@ -417,7 +442,7 @@ func (jf *JavaField) ShortName() string {
 }
 
 func (jf *JavaField) FullName() string {
-	return fmt.Sprintf("%s.%s", jf.ParentType.FullName(), jf.Name)
+	return fmt.Sprintf("%s%s %s.%s", getStaticStr(jf.IsStatic), jf.Type.FullName(), jf.ParentType.FullName(), jf.Name)
 }
 
 func (jf *JavaField) GetVisibility() VisibilityType {
