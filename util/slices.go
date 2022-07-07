@@ -54,7 +54,7 @@ func Reverse[T any](slice []T) []T {
 
 func Keys[K comparable, V any](m map[K]V) []K {
 	ret := []K{}
-	for k, _ := range m {
+	for k := range m {
 		ret = append(ret, k)
 	}
 	return ret

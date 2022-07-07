@@ -278,9 +278,7 @@ func (jt *JavaType) AllMembers() []JavaSymbol {
 
 	// Go to parent class/interfaces and add their members too
 	for _, supertype := range jt.Extends {
-		for _, m := range supertype.AllMembers() {
-			ret = append(ret, m)
-		}
+		ret = append(ret, supertype.AllMembers()...)
 	}
 
 	return ret

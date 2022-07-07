@@ -493,7 +493,7 @@ func TestServer_Completion_Dot(t *testing.T) {
 	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: createTextDocument("test_location", `public class Main {
 	public void main() {
-		System.out
+		System.o
 	}
 }`)})
 	assert.Nil(t, err)

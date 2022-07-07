@@ -334,7 +334,7 @@ func (j *JavaLS) Completion(_ context.Context, params *protocol.CompletionParams
 			dotIdx = i
 			break
 		}
-		if !isAlphaNumeric(ch) || !isWhitespace(ch) {
+		if !isAlphaNumeric(ch) && !isWhitespace(ch) {
 			break
 		}
 	}
@@ -350,7 +350,7 @@ func (j *JavaLS) Completion(_ context.Context, params *protocol.CompletionParams
 			})
 			if leftOfDot != nil {
 				allMembers := leftOfDot.GetType().AllMembers()
-				j.log.Info(fmt.Sprintf("dot members: %d", len(allMembers)))
+				j.log.Info(fmt.Sprintf("Auto-complete dot items: %d", len(allMembers)))
 				return symbolsToCompletionList(allMembers), nil
 			}
 		}
@@ -362,8 +362,9 @@ func (j *JavaLS) Completion(_ context.Context, params *protocol.CompletionParams
 			Line:      int(params.Position.Line + 1),
 			Character: int(params.Position.Character),
 		})
-		j.log.Info(fmt.Sprintf("non-dot members: %d", len(scope.AllSymbols())))
-		return symbolsToCompletionList(scope.AllSymbols()), nil
+		symbols := scope.AllSymbols()
+		j.log.Info(fmt.Sprintf("Auto-complete non-dot items: %d", len(symbols)))
+		return symbolsToCompletionList(symbols), nil
 	}
 
 	return nil, nil
