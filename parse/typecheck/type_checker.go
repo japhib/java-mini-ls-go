@@ -102,15 +102,15 @@ type TypeCheckResult struct {
 
 // CheckTypes is the entrypoint for all type-related analysis. First calls GatherTypes and then checkTypes,
 // helpfully stringing the return values of the one into the ones that are necessary for the other.
-func CheckTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, builtins *typ.TypeMap) TypeCheckResult {
-	types, defUsages := GatherTypes(fileURI, tree, builtins)
-	return checkTypes(logger, tree, fileURI, types, builtins, defUsages)
+func CheckTypes(logger *zap.Logger, fileURI string, fileVersion int, tree antlr.Tree, builtins *typ.TypeMap) TypeCheckResult {
+	types, defUsages := GatherTypes(fileURI, fileVersion, tree, builtins)
+	return checkTypes(logger, tree, fileURI, fileVersion, types, builtins, defUsages)
 }
 
 // checkTypes traverses the given parse tree and performs type checking in all applicable
 // places. e.g. expressions, return statements, function calls, etc.
-func checkTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, userTypes *typ.TypeMap, builtins *typ.TypeMap, defUsages *DefinitionsUsagesLookup) TypeCheckResult {
-	visitor := newTypeChecker(logger, fileURI, userTypes, builtins, defUsages)
+func checkTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, fileVersion int, userTypes *typ.TypeMap, builtins *typ.TypeMap, defUsages *DefinitionsUsagesLookup) TypeCheckResult {
+	visitor := newTypeChecker(logger, fileURI, fileVersion, userTypes, builtins, defUsages)
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 
 	return TypeCheckResult{
@@ -140,15 +140,16 @@ func (te typedExpression) String() string {
 
 type typeChecker struct {
 	javaparser.BaseJavaParserListener
-	logger       *zap.Logger
-	currFileURI  string
-	userTypes    *typ.TypeMap
-	builtins     *typ.TypeMap
-	errors       []TypeError
-	scopeTracker *parse.ScopeTracker
-	rootScope    TypeCheckingScope
-	currentScope *TypeCheckingScope
-	defUsages    *DefinitionsUsagesLookup
+	logger          *zap.Logger
+	currFileURI     string
+	currFileVersion int
+	userTypes       *typ.TypeMap
+	builtins        *typ.TypeMap
+	errors          []TypeError
+	scopeTracker    *parse.ScopeTracker
+	rootScope       TypeCheckingScope
+	currentScope    *TypeCheckingScope
+	defUsages       *DefinitionsUsagesLookup
 
 	// A stack used to keep track of the types of various expressions.
 	// For example, in the binary expression `9 + 10`:
@@ -159,7 +160,7 @@ type typeChecker struct {
 	expressionStack util.Stack[typedExpression]
 }
 
-func newTypeChecker(logger *zap.Logger, fileURI string, userTypes *typ.TypeMap, builtins *typ.TypeMap, defUsages *DefinitionsUsagesLookup) *typeChecker {
+func newTypeChecker(logger *zap.Logger, fileURI string, fileVersion int, userTypes *typ.TypeMap, builtins *typ.TypeMap, defUsages *DefinitionsUsagesLookup) *typeChecker {
 	rootScope := newTypeCheckingScope(
 		nil,
 		nil,
@@ -180,6 +181,7 @@ func newTypeChecker(logger *zap.Logger, fileURI string, userTypes *typ.TypeMap, 
 		BaseJavaParserListener: javaparser.BaseJavaParserListener{},
 		logger:                 logger.Named("typeChecker"),
 		currFileURI:            fileURI,
+		currFileVersion:        fileVersion,
 		userTypes:              userTypes,
 		builtins:               builtins,
 		errors:                 make([]TypeError, 0),
@@ -188,6 +190,14 @@ func newTypeChecker(logger *zap.Logger, fileURI string, userTypes *typ.TypeMap, 
 		currentScope:           &rootScope,
 		defUsages:              defUsages,
 		expressionStack:        util.NewStack[typedExpression](),
+	}
+}
+
+func (tc *typeChecker) makeCodeLocation(bounds loc.Bounds) loc.CodeLocation {
+	return loc.CodeLocation{
+		FileUri: tc.currFileURI,
+		Version: tc.currFileVersion,
+		Loc:     bounds,
 	}
 }
 
@@ -280,12 +290,9 @@ func (tc *typeChecker) checkAndAddVariable(name string, ttype *typ.JavaType, bou
 	enclosingMethod, ok := topScope.Symbol.(*typ.JavaMethod)
 	if ok {
 		// We're inside a method, so it's a local
-		local := typ.NewJavaLocal(name, ttype, enclosingMethod, loc.CodeLocation{
-			FileUri: tc.currFileURI,
-			Loc:     bounds,
-		})
+		local := typ.NewJavaLocal(name, ttype, enclosingMethod, tc.makeCodeLocation(bounds))
 		topScope.addLocal(local)
-		tc.defUsages.Add(loc.CodeLocation{FileUri: tc.currFileURI, Loc: bounds}, local, false)
+		tc.defUsages.Add(tc.makeCodeLocation(bounds), local, false)
 	}
 }
 
@@ -319,10 +326,7 @@ func (tc *typeChecker) EnterEveryRule(ctx antlr.ParserRuleContext) {
 			method := enclosingType.Methods[methodIdx]
 
 			for _, param := range method.Params {
-				local := typ.NewJavaLocal(param.Name, param.Type, method, loc.CodeLocation{
-					FileUri: tc.currFileURI,
-					Loc:     bounds,
-				})
+				local := typ.NewJavaLocal(param.Name, param.Type, method, tc.makeCodeLocation(bounds))
 				typeScope.addLocal(local)
 			}
 		}
@@ -510,7 +514,7 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 	topTypeScope := tc.currentScope
 	ident, ok := topTypeScope.Locals[identName]
 	if ok {
-		tc.defUsages.Add(loc.CodeLocation{FileUri: tc.currFileURI, Loc: bounds}, ident, true)
+		tc.defUsages.Add(tc.makeCodeLocation(bounds), ident, true)
 		tc.pushExprType(ident.Type, bounds)
 		return
 	}
@@ -519,7 +523,7 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 	// Is there a class member by that name?
 	member := enclosing.LookupMember(identName)
 	if member != nil {
-		tc.defUsages.Add(loc.CodeLocation{FileUri: tc.currFileURI, Loc: bounds}, member, true)
+		tc.defUsages.Add(tc.makeCodeLocation(bounds), member, true)
 		tc.pushExprType(member.GetType(), bounds)
 		return
 	}
@@ -527,8 +531,7 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 	// Is there a type by that name?
 	ttype := tc.lookupType(identName)
 	if ttype != nil {
-		// TODO need to clean up usages of built-in types at some point, otherwise it'll become a memory leak
-		tc.defUsages.Add(loc.CodeLocation{FileUri: tc.currFileURI, Loc: bounds}, ttype, true)
+		tc.defUsages.Add(tc.makeCodeLocation(bounds), ttype, true)
 		tc.pushExprType(ttype.GetType(), bounds)
 		return
 	}
@@ -664,10 +667,7 @@ func (tc *typeChecker) handleDotExpr(ctx *javaparser.ExpressionContext) {
 			})
 			memberType = tc.lookupOrCreateType("any")
 		} else {
-			tc.defUsages.Add(
-				loc.CodeLocation{FileUri: tc.currFileURI, Loc: loc.ParserRuleContextToBounds(ident)},
-				member,
-				true)
+			tc.defUsages.Add(tc.makeCodeLocation(loc.ParserRuleContextToBounds(ident)), member, true)
 			memberType = member.GetType()
 		}
 
@@ -698,10 +698,7 @@ func (tc *typeChecker) handleDotExpr(ctx *javaparser.ExpressionContext) {
 			return
 		}
 
-		tc.defUsages.Add(
-			loc.CodeLocation{FileUri: tc.currFileURI, Loc: loc.ParserRuleContextToBounds(ident)},
-			member,
-			true)
+		tc.defUsages.Add(tc.makeCodeLocation(loc.ParserRuleContextToBounds(ident)), member, true)
 
 		methodType := member.GetType()
 		if methodType.Type != typ.JavaTypeLSPMethod {

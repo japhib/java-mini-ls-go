@@ -74,7 +74,13 @@ func (b Bounds) Size() int {
 
 type CodeLocation struct {
 	FileUri string
+	// Version is the version of this file -- used for checking whether the file contents are out-of-date
+	Version int
 	Loc     Bounds
+}
+
+func (cl CodeLocation) String() string {
+	return fmt.Sprintf("%s|%d|%s", cl.FileUri, cl.Version, cl.Loc.String())
 }
 
 func (cl CodeLocation) Equals(other CodeLocation) bool {

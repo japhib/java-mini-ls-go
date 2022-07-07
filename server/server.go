@@ -134,7 +134,7 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	symbols := sym.FindSymbols(parsed)
 	j.symbols.Set(uriString, symbols)
 
-	typeCheckingResult := typecheck.CheckTypes(j.log, parsed, uriString, j.builtinTypes)
+	typeCheckingResult := typecheck.CheckTypes(j.log, uriString, int(textDocument.Version), parsed, j.builtinTypes)
 	j.scopes.Set(uriString, typeCheckingResult.RootScope)
 	j.defUsages.Set(uriString, typeCheckingResult.DefUsagesLookup)
 

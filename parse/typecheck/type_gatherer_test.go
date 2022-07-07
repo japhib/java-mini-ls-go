@@ -72,7 +72,7 @@ public class Main {
 	builtins := typ.NewTypeMap()
 	builtins.Add(strType)
 
-	types, _ := GatherTypes("testfile", tree, builtins)
+	types, _ := GatherTypes("testfile", 0, tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
 
 	expectedTypes := typ.NewTypeMap()
@@ -139,7 +139,7 @@ class MyClass {
 	builtins.Add(strType)
 	builtins.Add(intType)
 
-	types, _ := GatherTypes("testfile", tree, builtins)
+	types, _ := GatherTypes("testfile", 0, tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
 
 	nestedType := &typ.JavaType{
@@ -239,7 +239,7 @@ enum MyEnum {
 	builtins := typ.NewTypeMap()
 	builtins.Add(strType)
 
-	types, _ := GatherTypes("testfile", tree, builtins)
+	types, _ := GatherTypes("testfile", 0, tree, builtins)
 	stripOutStuffWeDontWannaTest(types)
 
 	expectedTypes := typ.NewTypeMap()

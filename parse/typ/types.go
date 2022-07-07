@@ -51,6 +51,34 @@ type JavaSymbol interface {
 	GetType() *JavaType
 }
 
+// pruneUsages goes through an array of usages, checking for usages of the given file
+// that are out-of-date (version is < currVersion) and returns a new slice with only the most
+// up-to-date usages.
+//
+// Every time we add a usage to a symbol, we call this function to "garbage collect" any
+// old usages from a previous version of the given file.
+func pruneUsages(usages []loc.CodeLocation, fileURI string, currVersion int) []loc.CodeLocation {
+	toRemove := make([]int, 0)
+
+	for i, u := range usages {
+		if u.FileUri == fileURI && u.Version < currVersion {
+			toRemove = append(toRemove, i)
+		}
+	}
+
+	return removeUsages(usages, toRemove)
+}
+
+func removeUsages(usages []loc.CodeLocation, indicesToRemove []int) []loc.CodeLocation {
+	ret := make([]loc.CodeLocation, 0, len(usages))
+	for i, u := range usages {
+		if !slices.Contains(indicesToRemove, i) {
+			ret = append(ret, u)
+		}
+	}
+	return ret
+}
+
 type VisibilityType int
 
 const (
@@ -214,6 +242,7 @@ func (jt *JavaType) GetUsages() []loc.CodeLocation {
 
 func (jt *JavaType) AddUsage(location loc.CodeLocation) {
 	jt.Usages = append(jt.Usages, location)
+	jt.Usages = pruneUsages(jt.Usages, location.FileUri, location.Version)
 }
 
 func (jt *JavaType) GetType() *JavaType {
@@ -405,6 +434,7 @@ func (jf *JavaField) GetUsages() []loc.CodeLocation {
 
 func (jf *JavaField) AddUsage(location loc.CodeLocation) {
 	jf.Usages = append(jf.Usages, location)
+	jf.Usages = pruneUsages(jf.Usages, location.FileUri, location.Version)
 }
 
 func (jf *JavaField) GetType() *JavaType {
@@ -460,6 +490,7 @@ func (jc *JavaConstructor) GetUsages() []loc.CodeLocation {
 
 func (jc *JavaConstructor) AddUsage(location loc.CodeLocation) {
 	jc.Usages = append(jc.Usages, location)
+	jc.Usages = pruneUsages(jc.Usages, location.FileUri, location.Version)
 }
 
 func (jc *JavaConstructor) GetType() *JavaType {
@@ -540,6 +571,7 @@ func (jm *JavaMethod) GetUsages() []loc.CodeLocation {
 
 func (jm *JavaMethod) AddUsage(location loc.CodeLocation) {
 	jm.Usages = append(jm.Usages, location)
+	jm.Usages = pruneUsages(jm.Usages, location.FileUri, location.Version)
 }
 
 func (jm *JavaMethod) GetType() *JavaType {
@@ -632,6 +664,7 @@ func (jl *JavaLocal) GetUsages() []loc.CodeLocation {
 
 func (jl *JavaLocal) AddUsage(location loc.CodeLocation) {
 	jl.Usages = append(jl.Usages, location)
+	jl.Usages = pruneUsages(jl.Usages, location.FileUri, location.Version)
 }
 
 func (jl *JavaLocal) GetType() *JavaType {

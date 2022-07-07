@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
+func parseAndTypeCheckVersion(t *testing.T, code string, fileVersion int) TypeCheckResult {
 	// Make sure to load built-in types
 	builtins, err := typ.LoadBuiltinTypes()
 	if err != nil {
@@ -19,7 +19,11 @@ func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
 	tree, parseErrors := parse.Parse(code)
 	assert.Equal(t, 0, len(parseErrors))
 
-	return CheckTypes(zaptest.NewLogger(t), tree, "type_checker_test", builtins)
+	return CheckTypes(zaptest.NewLogger(t), "type_checker_test", fileVersion, tree, builtins)
+}
+
+func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {
+	return parseAndTypeCheckVersion(t, code, 0)
 }
 
 func TestCheckTypes_Addition(t *testing.T) {
@@ -320,6 +324,43 @@ public class MainClass {
 				End:   loc.FileLocation{Line: 4, Character: 19},
 			},
 		}}, refResult.GetUsages())
+	}
+}
+
+func TestCheckTypes_MethodUsages_OldVersionCleanup(t *testing.T) {
+	typeCheckResult := parseAndTypeCheckVersion(t, `
+public class MainClass {
+	public void main() {
+		System.out.println("hi1");
+		System.out.println("hi2");
+		System.out.println("hi3");
+	}
+}`, 0)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{}, typeErrors)
+
+	// Get references
+	defUsages := typeCheckResult.DefUsagesLookup
+	refResult := defUsages.Lookup(loc.FileLocation{Line: 4, Character: 13})
+	assert.NotNil(t, refResult)
+	if refResult != nil {
+		assert.Equal(t, 3, len(refResult.GetUsages()))
+	}
+
+	// re-parse with different content and new version number
+	typeCheckResult = parseAndTypeCheckVersion(t, `
+public class MainClass {
+	public void main() {
+		System.out.println("hi1");
+	}
+}`, 1)
+
+	// Get references
+	defUsages = typeCheckResult.DefUsagesLookup
+	refResult = defUsages.Lookup(loc.FileLocation{Line: 4, Character: 13})
+	assert.NotNil(t, refResult)
+	if refResult != nil {
+		assert.Equal(t, 1, len(refResult.GetUsages()))
 	}
 }
 

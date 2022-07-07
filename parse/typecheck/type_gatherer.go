@@ -12,8 +12,8 @@ import (
 
 // GatherTypes traverses the given parse tree and gathers all class, method, field, etc. declarations.
 // TODO doesn't get visibility of any types.
-func GatherTypes(fileURI string, tree antlr.Tree, builtins *typ.TypeMap) (*typ.TypeMap, *DefinitionsUsagesLookup) {
-	visitor := newTypeGatherer(fileURI, builtins)
+func GatherTypes(fileURI string, fileVersion int, tree antlr.Tree, builtins *typ.TypeMap) (*typ.TypeMap, *DefinitionsUsagesLookup) {
+	visitor := newTypeGatherer(fileURI, fileVersion, builtins)
 
 	// First pass: just get types (no fields/methods yet, since those will reference the types)
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
@@ -42,12 +42,13 @@ type typeGatherer struct {
 	types                 *typ.TypeMap
 	defUsages             *DefinitionsUsagesLookup
 	currFileURI           string
+	currFileVersion       int
 	currPackageName       string
 	isFirstPass           bool
 	currentMemberIsStatic bool
 }
 
-func newTypeGatherer(fileURI string, builtins *typ.TypeMap) *typeGatherer {
+func newTypeGatherer(fileURI string, fileVersion int, builtins *typ.TypeMap) *typeGatherer {
 	return &typeGatherer{
 		BaseJavaParserListener: javaparser.BaseJavaParserListener{},
 		scopeTracker:           parse.NewScopeTracker(),
@@ -55,9 +56,18 @@ func newTypeGatherer(fileURI string, builtins *typ.TypeMap) *typeGatherer {
 		types:                  typ.NewTypeMap(),
 		defUsages:              NewDefinitionsUsagesLookup(),
 		currFileURI:            fileURI,
+		currFileVersion:        fileVersion,
 		currPackageName:        "",
 		isFirstPass:            true,
 		currentMemberIsStatic:  false,
+	}
+}
+
+func (tg *typeGatherer) makeCodeLocation(bounds loc.Bounds) loc.CodeLocation {
+	return loc.CodeLocation{
+		FileUri: tg.currFileURI,
+		Version: tg.currFileVersion,
+		Loc:     bounds,
 	}
 }
 
@@ -162,7 +172,7 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 			ident := varDecl.(*javaparser.VariableDeclaratorContext).VariableDeclaratorId().(*javaparser.VariableDeclaratorIdContext).Identifier()
 			fieldName := ident.GetText()
 			bounds := loc.ParserRuleContextToBounds(ident)
-			defLocation := loc.CodeLocation{FileUri: tg.currFileURI, Loc: bounds}
+			defLocation := tg.makeCodeLocation(bounds)
 
 			field := &typ.JavaField{
 				Name:       fieldName,
@@ -184,12 +194,10 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 }
 
 func (tg *typeGatherer) addNewTypeFromScope(scope *parse.Scope, ttype typ.JavaTypeType) {
-	newType := typ.NewJavaType(scope.Name, tg.currPackageName, typ.VisibilityPublic, ttype, &loc.CodeLocation{
-		FileUri: tg.currFileURI,
-		Loc:     scope.Bounds,
-	})
+	location := tg.makeCodeLocation(scope.Bounds)
+	newType := typ.NewJavaType(scope.Name, tg.currPackageName, typ.VisibilityPublic, ttype, &location)
 	tg.types.Add(newType)
-	tg.defUsages.Add(loc.CodeLocation{FileUri: tg.currFileURI, Loc: scope.Bounds}, newType, false)
+	tg.defUsages.Add(location, newType, false)
 }
 
 func (tg *typeGatherer) checkScopeExtendsImplements(scope *parse.Scope, ctx antlr.ParserRuleContext) {
@@ -261,22 +269,18 @@ func (tg *typeGatherer) addNewConstructorFromScope(ctx formalParametersCtx) {
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
 	currType := tg.types.Get(currTypeName)
 
-	bounds := loc.ParserRuleContextToBounds(ctx.Identifier())
-
+	location := tg.makeCodeLocation(loc.ParserRuleContextToBounds(ctx.Identifier()))
 	newConstructor := &typ.JavaConstructor{
 		ParentType: currType,
 		Params:     tg.getArgsFromContext(ctx),
-		Definition: &loc.CodeLocation{
-			FileUri: tg.currFileURI,
-			Loc:     bounds,
-		},
+		Definition: &location,
 		Usages:     []loc.CodeLocation{},
 		Visibility: 0,
 	}
 
 	currType.Constructors = append(currType.Constructors, newConstructor)
 
-	tg.defUsages.Add(loc.CodeLocation{FileUri: tg.currFileURI, Loc: bounds}, newConstructor, false)
+	tg.defUsages.Add(location, newConstructor, false)
 }
 
 func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx) {
@@ -284,17 +288,13 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx)
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
 	currType := tg.types.Get(currTypeName)
 
-	bounds := loc.ParserRuleContextToBounds(ctx.Identifier())
-
+	location := tg.makeCodeLocation(loc.ParserRuleContextToBounds(ctx.Identifier()))
 	method := &typ.JavaMethod{
 		Name:       scope.Name,
 		ParentType: currType,
 		ReturnType: nil,
 		Params:     nil,
-		Definition: &loc.CodeLocation{
-			FileUri: tg.currFileURI,
-			Loc:     bounds,
-		},
+		Definition: &location,
 		Usages:     []loc.CodeLocation{},
 		Visibility: 0,
 		IsStatic:   false,
@@ -310,7 +310,7 @@ func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx)
 
 	currType.Methods = append(currType.Methods, method)
 
-	tg.defUsages.Add(loc.CodeLocation{FileUri: tg.currFileURI, Loc: bounds}, method, false)
+	tg.defUsages.Add(location, method, false)
 }
 
 func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*typ.JavaParameter {
