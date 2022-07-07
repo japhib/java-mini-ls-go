@@ -524,7 +524,11 @@ statement
     | CONTINUE identifier? ';'
     | YIELD expression ';' // Java17
     | SEMI
-    | statementExpression=expression ';'
+    // The semicolon on this line really shouldn't be optional for correct Java.
+    // However, I've made it optional to support partial-statement parsing so we
+    // can provide better support for auto-completion.
+    // Also added an optional dot (also for better supporting auto-completion).
+    | statementExpression=expression '.'? ';'?
     | switchExpression ';'? // Java17
     | identifierLabel=identifier ':' statement
     ;

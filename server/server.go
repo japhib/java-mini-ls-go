@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go.lsp.dev/uri"
+	"golang.org/x/exp/slices"
 	"java-mini-ls-go/parse"
 	"java-mini-ls-go/parse/loc"
 	"java-mini-ls-go/parse/sym"
@@ -323,9 +324,17 @@ func (j *JavaLS) Completion(_ context.Context, params *protocol.CompletionParams
 	// go backwards from the current character to see if this was triggered by a dot `.`, and if so,
 	// what's the symbol on the left of the dot
 	dotIdx := -1
-	for i := int(params.Position.Character) - 1; i >= 0; i-- {
-		if textOnLine[i] == '.' {
+	startIdx := int(params.Position.Character) - 1
+	if startIdx >= len(textOnLine) {
+		startIdx = len(textOnLine) - 1
+	}
+	for i := startIdx; i >= 0; i-- {
+		ch := textOnLine[i]
+		if ch == '.' {
 			dotIdx = i
+			break
+		}
+		if !isAlphaNumeric(ch) || !isWhitespace(ch) {
 			break
 		}
 	}
@@ -337,7 +346,7 @@ func (j *JavaLS) Completion(_ context.Context, params *protocol.CompletionParams
 		if ok {
 			leftOfDot := defUsages.Lookup(loc.FileLocation{
 				Line:      int(params.Position.Line + 1),
-				Character: int(params.Position.Character),
+				Character: dotIdx,
 			})
 			if leftOfDot != nil {
 				allMembers := leftOfDot.GetType().AllMembers()
@@ -358,6 +367,21 @@ func (j *JavaLS) Completion(_ context.Context, params *protocol.CompletionParams
 	}
 
 	return nil, nil
+}
+
+func isAlphaNumeric(ch uint8) bool {
+	return (ch >= 'a' && ch <= 'z') ||
+		(ch >= 'A' && ch <= 'Z') ||
+		(ch >= '0' && ch <= '9') ||
+		ch == '_'
+}
+
+var whitespaceChars = []uint8{
+	'\n', '\r', '\t', '\v', ' ',
+}
+
+func isWhitespace(ch uint8) bool {
+	return slices.Index(whitespaceChars, ch) != -1
 }
 
 func symbolsToCompletionList(symbols []typ.JavaSymbol) *protocol.CompletionList {
