@@ -427,6 +427,39 @@ class MainClass {
 }`)
 	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
+
+	// Get definition of Something.a
+	defUsages := typeCheckResult.DefUsagesLookup
+	defResult := defUsages.Lookup(loc.FileLocation{Line: 9, Character: 12})
+	assert.NotNil(t, defResult)
+	if defResult != nil {
+		assert.Equal(t, typ.JavaSymbolField, defResult.Kind())
+		assert.Equal(t, "a", defResult.ShortName())
+
+		assert.Equal(t, &loc.CodeLocation{
+			FileUri: "type_checker_test",
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{Line: 3, Character: 5},
+				End:   loc.FileLocation{Line: 3, Character: 6},
+			},
+		}, defResult.GetDefinition())
+	}
+
+	// Get references: from `int a = 1` to `return a`
+	refResult := defUsages.Lookup(loc.FileLocation{Line: 3, Character: 5})
+	assert.NotNil(t, refResult)
+	if refResult != nil {
+		assert.Equal(t, typ.JavaSymbolField, refResult.Kind())
+		assert.Equal(t, "a", refResult.ShortName())
+
+		assert.Equal(t, []loc.CodeLocation{{
+			FileUri: "type_checker_test",
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{Line: 9, Character: 12},
+				End:   loc.FileLocation{Line: 9, Character: 13},
+			},
+		}}, refResult.GetUsages())
+	}
 }
 
 func TestCheckTypes_DotOperator_Field_Error(t *testing.T) {
@@ -459,14 +492,50 @@ class MainClass {
 
 func TestCheckTypes_DotOperator_Method(t *testing.T) {
 	typeCheckResult := parseAndTypeCheck(t, `
+class Something {
+	static void println() { }
+}
+
 class MainClass {
 	void main() {
-		var a = System.in;
-		System.out.println();
+		Something.println();
 	}
 }`)
 	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
+
+	// Get definition
+	defUsages := typeCheckResult.DefUsagesLookup
+	defResult := defUsages.Lookup(loc.FileLocation{Line: 8, Character: 13})
+	assert.NotNil(t, defResult)
+	if defResult != nil {
+		assert.Equal(t, typ.JavaSymbolMethod, defResult.Kind())
+		assert.Equal(t, "println", defResult.ShortName())
+
+		assert.Equal(t, &loc.CodeLocation{
+			FileUri: "type_checker_test",
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{Line: 3, Character: 13},
+				End:   loc.FileLocation{Line: 3, Character: 20},
+			},
+		}, defResult.GetDefinition())
+	}
+
+	// Get references
+	refResult := defUsages.Lookup(loc.FileLocation{Line: 3, Character: 13})
+	assert.NotNil(t, refResult)
+	if refResult != nil {
+		assert.Equal(t, typ.JavaSymbolMethod, refResult.Kind())
+		assert.Equal(t, "println", refResult.ShortName())
+
+		assert.Equal(t, []loc.CodeLocation{{
+			FileUri: "type_checker_test",
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{Line: 8, Character: 12},
+				End:   loc.FileLocation{Line: 8, Character: 19},
+			},
+		}}, refResult.GetUsages())
+	}
 }
 
 func TestCheckTypes_DotOperator_Method_Error(t *testing.T) {

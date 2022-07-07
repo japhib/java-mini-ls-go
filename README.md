@@ -29,9 +29,14 @@ server? This has the potential to even further reduce memory usage and startup t
 
 ## Limitations
 
+Note that this is currently just a proof-of-concept so there are a LOT of limitations. These are mainly things
+that are just not implemented yet. They're not necessarily more difficult than what's already been done -- they
+were simply deemed as lower priority for a minimal demo-style implementation.
+
 - Ignores generics
 - Ignores dependencies
-- Definitions/usages gets confused by method/constructor overloads
+- Doesn't typecheck constructors
+- Definition/usages finder gets confused by method overloads
 - Only loads [java.base](https://docs.oracle.com/en/java/javase/17/docs/api/java.base/module-summary.html) module of 
 Java standard library (packages like java.lang, java.util)
 - Doesn't do fully-qualified class name resolution. So e.g. if you define a class

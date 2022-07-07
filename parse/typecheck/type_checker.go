@@ -543,10 +543,23 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 	tc.pushAnyType(bounds)
 }
 
+func (tc *typeChecker) ExitCreator(ctx *javaparser.CreatorContext) {
+	// TODO handle array creations eg. `var intArray = new int[5]`
+
+	createdName := ctx.CreatedName().(*javaparser.CreatedNameContext)
+	// TODO handle generics
+	// TODO handle multiple identifiers, e.g. `new OuterClass.InnerClass()`
+	identName := createdName.Identifier(0).GetText()
+
+	// TODO constructor resolution & type checking
+
+	tc.pushExprTypeName(identName, loc.ParserRuleContextToBounds(ctx))
+}
+
 func (tc *typeChecker) ExitMethodCall(ctx *javaparser.MethodCallContext) {
 	if tc.insideExpressionType(ExprTypeDotExpr) {
 		// If we're a method call inside of a dot expression (e.g. `System.exit()`), don't worry
-		// about it, since it'll get handled by handleDotOperator()
+		// about it, since it'll get handled by handleDotExpr()
 		return
 	}
 
@@ -619,7 +632,7 @@ func (tc *typeChecker) EnterExpression(ctx *javaparser.ExpressionContext) {
 func (tc *typeChecker) ExitExpression(ctx *javaparser.ExpressionContext) {
 	dotToken := ctx.GetDotop()
 	if dotToken != nil {
-		tc.handleDotOperator(ctx)
+		tc.handleDotExpr(ctx)
 	}
 
 	bopToken := ctx.GetBop()
@@ -629,7 +642,7 @@ func (tc *typeChecker) ExitExpression(ctx *javaparser.ExpressionContext) {
 	}
 }
 
-func (tc *typeChecker) handleDotOperator(ctx *javaparser.ExpressionContext) {
+func (tc *typeChecker) handleDotExpr(ctx *javaparser.ExpressionContext) {
 	// When entering the dot operator expression, we pushed a placeholder onto the stack.
 	// Now we pop off everything until that placeholder so we can deal with it in a different order.
 	exprs := tc.popUntilPlaceholderType(ExprTypeDotExpr)
@@ -651,6 +664,10 @@ func (tc *typeChecker) handleDotOperator(ctx *javaparser.ExpressionContext) {
 			})
 			memberType = tc.lookupOrCreateType("any")
 		} else {
+			tc.defUsages.Add(
+				loc.CodeLocation{FileUri: tc.currFileURI, Loc: loc.ParserRuleContextToBounds(ident)},
+				member,
+				true)
 			memberType = member.GetType()
 		}
 
@@ -680,6 +697,11 @@ func (tc *typeChecker) handleDotOperator(ctx *javaparser.ExpressionContext) {
 			tc.pushAnyType(loc.ParserRuleContextToBounds(ident))
 			return
 		}
+
+		tc.defUsages.Add(
+			loc.CodeLocation{FileUri: tc.currFileURI, Loc: loc.ParserRuleContextToBounds(ident)},
+			member,
+			true)
 
 		methodType := member.GetType()
 		if methodType.Type != typ.JavaTypeLSPMethod {
