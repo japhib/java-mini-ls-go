@@ -31,27 +31,6 @@ const (
 	ScopeTypeGenericMethod          ScopeType = iota
 	ScopeTypeInterfaceMethod        ScopeType = iota
 	ScopeTypeMethod                 ScopeType = iota
-
-	// statement types
-
-	ScopeTypeBlock     ScopeType = iota
-	ScopeTypeStatement ScopeType = iota
-
-	// expression types
-
-	ScopeTypeExpression     ScopeType = iota
-	ScopeTypePrimary        ScopeType = iota
-	ScopeTypeDotExpr        ScopeType = iota
-	ScopeTypeIndexExpr      ScopeType = iota
-	ScopeTypeMethodCallExpr ScopeType = iota
-	ScopeTypeNewExpr        ScopeType = iota
-	ScopeTypeCastExpr       ScopeType = iota
-	ScopeTypeUnaryExpr      ScopeType = iota
-	ScopeTypeBinaryExpr     ScopeType = iota
-	ScopeTypeTernaryExpr    ScopeType = iota
-	ScopeTypeLambdaExpr     ScopeType = iota
-	ScopeTypeSwitchExpr     ScopeType = iota
-	ScopeTypeExprOther      ScopeType = iota
 )
 
 var classTypes = []ScopeType{
@@ -71,44 +50,12 @@ var methodTypes = []ScopeType{
 	ScopeTypeMethod,
 }
 
-var statementTypes = []ScopeType{
-	ScopeTypeBlock,
-	ScopeTypeStatement,
-}
-
-var expressionTypes = []ScopeType{
-	ScopeTypeExpression,
-	ScopeTypePrimary,
-	ScopeTypeDotExpr,
-	ScopeTypeIndexExpr,
-	ScopeTypeMethodCallExpr,
-	ScopeTypeNewExpr,
-	ScopeTypeCastExpr,
-	ScopeTypeUnaryExpr,
-	ScopeTypeBinaryExpr,
-	ScopeTypeTernaryExpr,
-	ScopeTypeLambdaExpr,
-	ScopeTypeSwitchExpr,
-}
-
 func (st ScopeType) IsClassType() bool {
 	return slices.Contains(classTypes, st)
 }
 
 func (st ScopeType) IsMethodType() bool {
 	return slices.Contains(methodTypes, st)
-}
-
-func (st ScopeType) IsClassOrMethodType() bool {
-	return st.IsClassType() || st.IsMethodType()
-}
-
-func (st ScopeType) IsStatementType() bool {
-	return slices.Contains(statementTypes, st)
-}
-
-func (st ScopeType) IsExpressionType() bool {
-	return slices.Contains(expressionTypes, st)
 }
 
 type Scope struct {
@@ -187,18 +134,6 @@ func (st *ScopeTracker) shouldCreateScope(ruleType int) bool {
 		return true
 	case javaparser.JavaParserRULE_genericConstructorDeclaration:
 		return true
-
-	// statement types
-
-	case javaparser.JavaParserRULE_block:
-		return true
-	case javaparser.JavaParserRULE_statement:
-		return true
-
-	// expression types
-
-	case javaparser.JavaParserRULE_expression:
-		return true
 	}
 	return false
 }
@@ -248,64 +183,11 @@ func (st *ScopeTracker) createScope(parent *Scope, ctx antlr.ParserRuleContext) 
 	case javaparser.JavaParserRULE_recordDeclaration:
 		ret.Type = ScopeTypeRecord
 		subCtx = ctx.(*javaparser.RecordDeclarationContext).Identifier()
-
-	// Anonymous scopes
-
-	case javaparser.JavaParserRULE_block:
-		ret.Type = ScopeTypeBlock
-		ret.Bounds = loc.ParserRuleContextToBounds(ctx)
-	case javaparser.JavaParserRULE_statement:
-		ret.Type = ScopeTypeStatement
-		ret.Bounds = loc.ParserRuleContextToBounds(ctx)
-	case javaparser.JavaParserRULE_expression:
-		ret.Type = expressionTypeForCtx(ctx.(*javaparser.ExpressionContext))
-		ret.Bounds = loc.ParserRuleContextToBounds(ctx)
 	}
-
-	if subCtx != nil {
-		ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
-	}
-
+	ret.Name, ret.Bounds = nameAndBoundsForCtx(subCtx)
 	return ret
 }
 
 func nameAndBoundsForCtx(ident javaparser.IIdentifierContext) (string, loc.Bounds) {
 	return ident.GetText(), loc.ParserRuleContextToBounds(ident)
-}
-
-func expressionTypeForCtx(ctx *javaparser.ExpressionContext) ScopeType {
-	if ctx.Primary() != nil {
-		return ScopeTypePrimary
-	}
-	if ctx.GetDotop() != nil {
-		return ScopeTypeDotExpr
-	}
-	if ctx.GetIndexop() != nil {
-		return ScopeTypeIndexExpr
-	}
-	if ctx.MethodCall() != nil {
-		return ScopeTypeMethodCallExpr
-	}
-	if ctx.NEW() != nil {
-		return ScopeTypeNewExpr
-	}
-	if ctx.CastExpr() != nil {
-		return ScopeTypeCastExpr
-	}
-	if ctx.GetPostfix() != nil || ctx.GetPrefix() != nil {
-		return ScopeTypeUnaryExpr
-	}
-	if ctx.GetBop() != nil {
-		return ScopeTypeBinaryExpr
-	}
-	if ctx.GetTern() != nil {
-		return ScopeTypeTernaryExpr
-	}
-	if ctx.LambdaExpression() != nil {
-		return ScopeTypeLambdaExpr
-	}
-	if ctx.SwitchExpression() != nil {
-		return ScopeTypeSwitchExpr
-	}
-	return ScopeTypeExprOther
 }

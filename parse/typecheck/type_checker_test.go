@@ -429,6 +429,34 @@ class MainClass {
 	assert.Equal(t, []TypeError{}, typeErrors)
 }
 
+func TestCheckTypes_DotOperator_Field_Error(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+class Something {
+	int a;
+}
+
+class MainClass {
+	void main() {
+		Something s = new Something();
+		var a = s.b;
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{{
+		Loc: loc.Bounds{
+			Start: loc.FileLocation{
+				Line:      9,
+				Character: 12,
+			},
+			End: loc.FileLocation{
+				Line:      9,
+				Character: 13,
+			},
+		},
+		Message: "Can't find member named b of type Something",
+	}}, typeErrors)
+}
+
 func TestCheckTypes_DotOperator_Method(t *testing.T) {
 	typeCheckResult := parseAndTypeCheck(t, `
 class MainClass {
@@ -441,6 +469,30 @@ class MainClass {
 	assert.Equal(t, []TypeError{}, typeErrors)
 }
 
+func TestCheckTypes_DotOperator_Method_Error(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+class MainClass {
+	void main() {
+		var a = System.in;
+		System.out.printlg();
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{{
+		Loc: loc.Bounds{
+			Start: loc.FileLocation{
+				Line:      5,
+				Character: 13,
+			},
+			End: loc.FileLocation{
+				Line:      5,
+				Character: 20,
+			},
+		},
+		Message: "Can't find member named printlg on type PrintStream",
+	}}, typeErrors)
+}
+
 func TestCheckTypes_DotOperator_Method_OneArgument(t *testing.T) {
 	typeCheckResult := parseAndTypeCheck(t, `
 class MainClass {
@@ -451,6 +503,30 @@ class MainClass {
 }`)
 	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
+}
+
+func TestCheckTypes_DotOperator_Method_OneArgument_Error(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+class MainClass {
+	void main() {
+		var a = System.in;
+		System.out.append("not_a_char");
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{{
+		Loc: loc.Bounds{
+			Start: loc.FileLocation{
+				Line:      5,
+				Character: 13,
+			},
+			End: loc.FileLocation{
+				Line:      5,
+				Character: 33,
+			},
+		},
+		Message: "Can't use String as type char in function call to PrintStream.append",
+	}}, typeErrors)
 }
 
 func TestCheckTypes_DotOperator_Method_SeveralArguments(t *testing.T) {
@@ -468,4 +544,48 @@ class MainClass {
 }`)
 	typeErrors := typeCheckResult.TypeErrors
 	assert.Equal(t, []TypeError{}, typeErrors)
+}
+
+func TestCheckTypes_DotOperator_Method_SeveralArguments_Error(t *testing.T) {
+	typeCheckResult := parseAndTypeCheck(t, `
+class HelperClass {
+	static void print3things(String a, int b, int c) {
+		System.out.println(a + b + c);
+	}
+}
+
+class MainClass {
+	void main() {
+		HelperClass.print3things("asdf", 1);
+	}
+}`)
+	typeErrors := typeCheckResult.TypeErrors
+	assert.Equal(t, []TypeError{
+		{
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{
+					Line:      10,
+					Character: 14,
+				},
+				End: loc.FileLocation{
+					Line:      10,
+					Character: 37,
+				},
+			},
+			Message: "Can't use String as type int in function call to HelperClass.print3things",
+		},
+		{
+			Loc: loc.Bounds{
+				Start: loc.FileLocation{
+					Line:      10,
+					Character: 14,
+				},
+				End: loc.FileLocation{
+					Line:      10,
+					Character: 37,
+				},
+			},
+			Message: "Not enough arguments in function call to HelperClass.print3things! Expected 3, got 2",
+		},
+	}, typeErrors)
 }

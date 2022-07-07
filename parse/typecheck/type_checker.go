@@ -16,6 +16,64 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+type ExprType int
+
+const (
+	ExprTypeUnset   ExprType = iota
+	ExprTypeDotExpr ExprType = iota
+
+	// Other expression types, not used yet
+	//ExprTypeExpression     ExprType = iota
+	//ExprTypePrimary        ExprType = iota
+	//ExprTypeIndexExpr      ExprType = iota
+	//ExprTypeMethodCallExpr ExprType = iota
+	//ExprTypeNewExpr        ExprType = iota
+	//ExprTypeCastExpr       ExprType = iota
+	//ExprTypeUnaryExpr      ExprType = iota
+	//ExprTypeBinaryExpr     ExprType = iota
+	//ExprTypeTernaryExpr    ExprType = iota
+	//ExprTypeLambdaExpr     ExprType = iota
+	//ExprTypeSwitchExpr     ExprType = iota
+	//ExprTypeExprOther      ExprType = iota
+)
+
+//func expressionTypeForCtx(ctx *javaparser.ExpressionContext) ScopeType {
+//	if ctx.Primary() != nil {
+//		return ScopeTypePrimary
+//	}
+//	if ctx.GetDotop() != nil {
+//		return ScopeTypeDotExpr
+//	}
+//	if ctx.GetIndexop() != nil {
+//		return ScopeTypeIndexExpr
+//	}
+//	if ctx.MethodCall() != nil {
+//		return ScopeTypeMethodCallExpr
+//	}
+//	if ctx.NEW() != nil {
+//		return ScopeTypeNewExpr
+//	}
+//	if ctx.CastExpr() != nil {
+//		return ScopeTypeCastExpr
+//	}
+//	if ctx.GetPostfix() != nil || ctx.GetPrefix() != nil {
+//		return ScopeTypeUnaryExpr
+//	}
+//	if ctx.GetBop() != nil {
+//		return ScopeTypeBinaryExpr
+//	}
+//	if ctx.GetTern() != nil {
+//		return ScopeTypeTernaryExpr
+//	}
+//	if ctx.LambdaExpression() != nil {
+//		return ScopeTypeLambdaExpr
+//	}
+//	if ctx.SwitchExpression() != nil {
+//		return ScopeTypeSwitchExpr
+//	}
+//	return ScopeTypeExprOther
+//}
+
 type TypeError struct {
 	Loc     loc.Bounds
 	Message string
@@ -73,7 +131,7 @@ type typedExpression struct {
 
 	// Normally the above fields are all that's necessary. But sometimes we'll push a placeholder value
 	// that doesn't have the above fields, and uses a scope type instead.
-	placeholderScopeType parse.ScopeType
+	placeholderExprType ExprType
 }
 
 func (te typedExpression) String() string {
@@ -163,8 +221,9 @@ func (tc *typeChecker) lookupOrCreateType(typeName string) *typ.JavaType {
 
 func (tc *typeChecker) pushExprType(ttype *typ.JavaType, bounds loc.Bounds) {
 	tc.expressionStack.Push(typedExpression{
-		loc:   bounds,
-		ttype: ttype,
+		loc:                 bounds,
+		ttype:               ttype,
+		placeholderExprType: ExprTypeUnset,
 	})
 }
 
@@ -176,20 +235,29 @@ func (tc *typeChecker) pushAnyType(bounds loc.Bounds) {
 	tc.pushExprTypeName("any", bounds)
 }
 
-func (tc *typeChecker) pushPlaceholder(scopeType parse.ScopeType) {
+func (tc *typeChecker) pushPlaceholder(exprType ExprType) {
 	tc.expressionStack.Push(typedExpression{
-		loc:                  loc.Bounds{}, //nolint:exhaustruct
-		ttype:                nil,
-		placeholderScopeType: scopeType,
+		loc:                 loc.Bounds{}, //nolint:exhaustruct
+		ttype:               nil,
+		placeholderExprType: exprType,
 	})
 }
 
+func (tc *typeChecker) insideExpressionType(exprType ExprType) bool {
+	for _, typedExpr := range tc.expressionStack.Values() {
+		if typedExpr.placeholderExprType == exprType {
+			return true
+		}
+	}
+	return false
+}
+
 // Pop everything off the expression stack until we get to a particular type of placeholder
-func (tc *typeChecker) popUntilPlaceholderType(scopeType parse.ScopeType) []typedExpression {
+func (tc *typeChecker) popUntilPlaceholderType(exprType ExprType) []typedExpression {
 	ret := []typedExpression{}
 	for {
 		popped := tc.expressionStack.Pop()
-		if popped.placeholderScopeType == scopeType {
+		if popped.placeholderExprType == exprType {
 			break
 		}
 		ret = append(ret, popped)
@@ -234,7 +302,7 @@ func (tc *typeChecker) getEnclosingType() *typ.JavaType {
 
 func (tc *typeChecker) EnterEveryRule(ctx antlr.ParserRuleContext) {
 	newScope := tc.scopeTracker.CheckEnterScope(ctx)
-	if newScope != nil && newScope.Type.IsClassOrMethodType() {
+	if newScope != nil {
 		bounds := loc.ParserRuleContextToBounds(ctx)
 		symbolForScope := tc.getSymbolFromScope(newScope)
 		typeScope := newTypeCheckingScope(symbolForScope, tc.currentScope, bounds)
@@ -286,7 +354,7 @@ func (tc *typeChecker) getSymbolFromScope(scope *parse.Scope) typ.JavaSymbol {
 
 func (tc *typeChecker) ExitEveryRule(ctx antlr.ParserRuleContext) {
 	oldScope := tc.scopeTracker.CheckExitScope(ctx)
-	if oldScope != nil && oldScope.Type.IsClassOrMethodType() {
+	if oldScope != nil {
 		tc.currentScope = tc.currentScope.Parent
 	}
 }
@@ -476,7 +544,7 @@ func (tc *typeChecker) handleIdentifier(ctx *javaparser.IdentifierContext) {
 }
 
 func (tc *typeChecker) ExitMethodCall(ctx *javaparser.MethodCallContext) {
-	if tc.scopeTracker.ScopeStack.Top().Type == parse.ScopeTypeDotExpr {
+	if tc.insideExpressionType(ExprTypeDotExpr) {
 		// If we're a method call inside of a dot expression (e.g. `System.exit()`), don't worry
 		// about it, since it'll get handled by handleDotOperator()
 		return
@@ -544,7 +612,7 @@ func (tc *typeChecker) handleMethodCall(ctx *javaparser.MethodCallContext, metho
 func (tc *typeChecker) EnterExpression(ctx *javaparser.ExpressionContext) {
 	dotToken := ctx.GetDotop()
 	if dotToken != nil {
-		tc.pushPlaceholder(parse.ScopeTypeDotExpr)
+		tc.pushPlaceholder(ExprTypeDotExpr)
 	}
 }
 
@@ -564,7 +632,7 @@ func (tc *typeChecker) ExitExpression(ctx *javaparser.ExpressionContext) {
 func (tc *typeChecker) handleDotOperator(ctx *javaparser.ExpressionContext) {
 	// When entering the dot operator expression, we pushed a placeholder onto the stack.
 	// Now we pop off everything until that placeholder so we can deal with it in a different order.
-	exprs := tc.popUntilPlaceholderType(parse.ScopeTypeDotExpr)
+	exprs := tc.popUntilPlaceholderType(ExprTypeDotExpr)
 
 	left := exprs[len(exprs)-1]
 
@@ -655,8 +723,9 @@ func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds loc.Bounds)
 			Loc:     exprBounds,
 		})
 		tc.expressionStack.Push(typedExpression{
-			loc:   exprBounds,
-			ttype: tc.lookupOrCreateType("any"),
+			loc:                 exprBounds,
+			ttype:               tc.lookupOrCreateType("any"),
+			placeholderExprType: ExprTypeUnset,
 		})
 	}
 	if right.ttype == nil {
@@ -725,8 +794,9 @@ func (tc *typeChecker) handleBinaryExpression(bop string, exprBounds loc.Bounds)
 	}
 
 	tc.expressionStack.Push(typedExpression{
-		loc:   exprBounds,
-		ttype: returnType,
+		loc:                 exprBounds,
+		ttype:               returnType,
+		placeholderExprType: ExprTypeUnset,
 	})
 }
 

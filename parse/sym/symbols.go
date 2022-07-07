@@ -139,7 +139,7 @@ func (s *symbolVisitor) addNewSymbol(name string, ttype CodeSymbolType, ctx antl
 
 func (s *symbolVisitor) EnterEveryRule(ctx antlr.ParserRuleContext) {
 	newScope := s.scopeTracker.CheckEnterScope(ctx)
-	if newScope != nil && newScope.Type.IsClassOrMethodType() {
+	if newScope != nil {
 		symbolForNewScope := NewCodeSymbol(newScope.Name, ScopeTypesToCodeSymboltypes[newScope.Type], ctx)
 		s.addSymbol(symbolForNewScope)
 		s.symbolStack.Push(symbolForNewScope)
@@ -148,7 +148,7 @@ func (s *symbolVisitor) EnterEveryRule(ctx antlr.ParserRuleContext) {
 
 func (s *symbolVisitor) ExitEveryRule(ctx antlr.ParserRuleContext) {
 	oldScope := s.scopeTracker.CheckExitScope(ctx)
-	if oldScope != nil && oldScope.Type.IsClassOrMethodType() {
+	if oldScope != nil {
 		s.symbolStack.Pop()
 	}
 }
