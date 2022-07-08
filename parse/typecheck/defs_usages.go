@@ -3,6 +3,7 @@ package typecheck
 import (
 	"java-mini-ls-go/parse/loc"
 	"java-mini-ls-go/parse/typ"
+	"java-mini-ls-go/util"
 )
 
 // SymbolWithLocation is a single definition or usage of a symbol.
@@ -26,17 +27,18 @@ type SymbolsOnLine []SymbolWithLocation
 // and finding its corresponding SymbolWithDefUsages struct.
 type DefinitionsUsagesLookup struct {
 	// DefUsagesByLine is a map of line numbers to the list of DefinitionsUsagesWithLocation on that line.
-	DefUsagesByLine map[int]SymbolsOnLine
+	DefUsagesByLine *util.SyncMap[int, SymbolsOnLine]
 }
 
 func NewDefinitionsUsagesLookup() *DefinitionsUsagesLookup {
 	return &DefinitionsUsagesLookup{
-		DefUsagesByLine: make(map[int]SymbolsOnLine),
+		DefUsagesByLine: util.NewSyncMap[int, SymbolsOnLine](),
 	}
 }
 
 func (dul *DefinitionsUsagesLookup) GetLine(line int) SymbolsOnLine {
-	return dul.DefUsagesByLine[line]
+	l, _ := dul.DefUsagesByLine.Get(line)
+	return l
 }
 
 func (dul *DefinitionsUsagesLookup) Add(location loc.CodeLocation, symbol typ.JavaSymbol, addUsage bool) {
@@ -47,7 +49,7 @@ func (dul *DefinitionsUsagesLookup) Add(location loc.CodeLocation, symbol typ.Ja
 	lineNumber := location.Loc.Start.Line
 	// Look up the list for the line
 	// Note: it's okay if it's nil because append treats it the same as if it were an empty slice.
-	line := dul.DefUsagesByLine[lineNumber]
+	line, _ := dul.DefUsagesByLine.Get(lineNumber)
 
 	// Also make sure there's not already an item with that name/bounds
 	for _, defUsages := range line {
@@ -65,13 +67,13 @@ func (dul *DefinitionsUsagesLookup) Add(location loc.CodeLocation, symbol typ.Ja
 	})
 
 	// Make sure to assign it back in case append had to realloc
-	dul.DefUsagesByLine[lineNumber] = line
+	dul.DefUsagesByLine.Set(lineNumber, line)
 }
 
 // Lookup Given a file location, returns the most specific SymbolWithDefUsages instance corresponding
 // to that file location, if one exists.
 func (dul *DefinitionsUsagesLookup) Lookup(loc loc.FileLocation) typ.JavaSymbol {
-	line := dul.DefUsagesByLine[loc.Line]
+	line, _ := dul.DefUsagesByLine.Get(loc.Line)
 	if line == nil {
 		return nil
 	}

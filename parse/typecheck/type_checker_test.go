@@ -19,7 +19,7 @@ func parseAndTypeCheckVersion(t *testing.T, code string, fileVersion int) TypeCh
 	tree, parseErrors := parse.Parse(code)
 	assert.Equal(t, 0, len(parseErrors))
 
-	return CheckTypes(zaptest.NewLogger(t), "type_checker_test", fileVersion, tree, builtins)
+	return GatherAndCheckTypes(zaptest.NewLogger(t), "type_checker_test", fileVersion, tree, builtins)
 }
 
 func parseAndTypeCheck(t *testing.T, code string) TypeCheckResult {

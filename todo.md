@@ -1,7 +1,8 @@
 # todo
 
-- Auto-completion
 - Automatically parse all files in project on startup
+  - Why isn't go-to-definition working between files?
+  - Add some unit tests around this - refactor the file loading into an interface
 - go-to-definition for import statements
 
 later:

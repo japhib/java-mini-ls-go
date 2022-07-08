@@ -308,6 +308,11 @@ func (jt *JavaType) LookupMember(name string) JavaSymbol {
 
 	// Go to parent class/interfaces and see if any of them have the field
 	for _, supertype := range jt.Extends {
+		if supertype == nil {
+			// this shouldn't happen, but whatever
+			continue
+		}
+
 		member := supertype.LookupMember(name)
 		if member != nil {
 			return member

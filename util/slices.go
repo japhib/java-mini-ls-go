@@ -1,6 +1,9 @@
 package util
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 
 // Map maps all elements of a slice of any type into the given function
 // and returns a new slice with the result
@@ -12,6 +15,38 @@ func Map[T any, U any](input []T, f func(T) U) []U {
 	}
 
 	return ret
+}
+
+// MapAsync is like Map but it spins up a separate goroutine for each
+// element of the input, executes the function in parallel, and waits for
+// the result.
+func MapAsync[T any, U any](input []T, f func(T) U) []U {
+	result := make([]U, len(input))
+
+	var wg sync.WaitGroup
+	wg.Add(len(input))
+	for idx, value := range input {
+		go func(i int, val T) {
+			result[i] = f(val)
+			wg.Done()
+		}(idx, value)
+	}
+	wg.Wait()
+
+	return result
+}
+
+// EachAsync is like MapAsync but it doesn't return a value
+func EachAsync[T any](input []T, f func(T)) {
+	var wg sync.WaitGroup
+	wg.Add(len(input))
+	for idx, value := range input {
+		go func(i int, val T) {
+			f(val)
+			wg.Done()
+		}(idx, value)
+	}
+	wg.Wait()
 }
 
 // MapToString maps all elements of a slice of any type into String() and

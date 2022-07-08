@@ -100,22 +100,22 @@ type TypeCheckResult struct {
 	RootScope       *TypeCheckingScope
 }
 
-// CheckTypes is the entrypoint for all type-related analysis. First calls GatherTypes and then checkTypes,
+// GatherAndCheckTypes is the entrypoint for type-related analysis involving one file. First calls GatherTypes and then CheckTypes,
 // helpfully stringing the return values of the one into the ones that are necessary for the other.
-func CheckTypes(logger *zap.Logger, fileURI string, fileVersion int, tree antlr.Tree, builtins *typ.TypeMap) TypeCheckResult {
+func GatherAndCheckTypes(logger *zap.Logger, fileURI string, fileVersion int, tree antlr.Tree, builtins *typ.TypeMap) TypeCheckResult {
 	types, defUsages := GatherTypes(fileURI, fileVersion, tree, builtins)
-	return checkTypes(logger, tree, fileURI, fileVersion, types, builtins, defUsages)
+	return CheckTypes(logger, fileURI, fileVersion, tree, types, builtins, defUsages)
 }
 
-// checkTypes traverses the given parse tree and performs type checking in all applicable
+// CheckTypes traverses the given parse tree and performs type checking in all applicable
 // places. e.g. expressions, return statements, function calls, etc.
-func checkTypes(logger *zap.Logger, tree antlr.Tree, fileURI string, fileVersion int, userTypes *typ.TypeMap, builtins *typ.TypeMap, defUsages *DefinitionsUsagesLookup) TypeCheckResult {
-	visitor := newTypeChecker(logger, fileURI, fileVersion, userTypes, builtins, defUsages)
+func CheckTypes(logger *zap.Logger, fileURI string, fileVersion int, tree antlr.Tree, userTypes *typ.TypeMap, builtins *typ.TypeMap, defUsages *DefinitionsUsagesLookup) TypeCheckResult {
+	visitor := newTypeChecker(logger, fileURI, fileVersion, builtins, userTypes, defUsages)
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
 
 	return TypeCheckResult{
 		TypeErrors:      visitor.errors,
-		DefUsagesLookup: visitor.defUsages,
+		DefUsagesLookup: defUsages,
 		RootScope:       visitor.rootScope,
 	}
 }
@@ -160,7 +160,7 @@ type typeChecker struct {
 	expressionStack util.Stack[typedExpression]
 }
 
-func newTypeChecker(logger *zap.Logger, fileURI string, fileVersion int, userTypes *typ.TypeMap, builtins *typ.TypeMap, defUsages *DefinitionsUsagesLookup) *typeChecker {
+func newTypeChecker(logger *zap.Logger, fileURI string, fileVersion int, builtins *typ.TypeMap, userTypes *typ.TypeMap, defUsages *DefinitionsUsagesLookup) *typeChecker {
 	rootScope := newTypeCheckingScope(
 		nil,
 		nil,
@@ -318,16 +318,19 @@ func (tc *typeChecker) EnterEveryRule(ctx antlr.ParserRuleContext) {
 			// Add method params to Locals.
 			// First, look up method in types.
 			enclosingType := tc.getEnclosingType()
+			if enclosingType != nil {
+				// TODO handle method overrides (same name)
+				methodIdx := slices.IndexFunc(enclosingType.Methods, func(method *typ.JavaMethod) bool {
+					return method.Name == newScope.Name
+				})
+				if methodIdx != -1 {
+					method := enclosingType.Methods[methodIdx]
 
-			// TODO handle method overrides (same name)
-			methodIdx := slices.IndexFunc(enclosingType.Methods, func(method *typ.JavaMethod) bool {
-				return method.Name == newScope.Name
-			})
-			method := enclosingType.Methods[methodIdx]
-
-			for _, param := range method.Params {
-				local := typ.NewJavaLocal(param.Name, param.Type, method, tc.makeCodeLocation(bounds))
-				typeScope.addLocal(local)
+					for _, param := range method.Params {
+						local := typ.NewJavaLocal(param.Name, param.Type, method, tc.makeCodeLocation(bounds))
+						typeScope.addLocal(local)
+					}
+				}
 			}
 		}
 
@@ -576,8 +579,8 @@ func (tc *typeChecker) ExitMethodCall(ctx *javaparser.MethodCallContext) {
 
 	// The identifier should be a method of type __LSPMethod__
 	methodType := tc.expressionStack.Pop().ttype
-	if methodType.Name != "__LSPMethod__" {
-		tc.logger.Error("method is not __LSPMethod__, instead it's: " + methodType.Name)
+	if methodType.Type != typ.JavaTypeLSPMethod {
+		//tc.logger.Error("method is not __LSPMethod__, instead it's: " + methodType.Name)
 		tc.pushAnyType(bounds)
 		return
 	}
@@ -649,6 +652,12 @@ func (tc *typeChecker) handleDotExpr(ctx *javaparser.ExpressionContext) {
 	// When entering the dot operator expression, we pushed a placeholder onto the stack.
 	// Now we pop off everything until that placeholder so we can deal with it in a different order.
 	exprs := tc.popUntilPlaceholderType(ExprTypeDotExpr)
+
+	if len(exprs) == 0 {
+		// TODO log this?
+		tc.pushAnyType(loc.ParserRuleContextToBounds(ctx))
+		return
+	}
 
 	left := exprs[len(exprs)-1]
 

@@ -13,16 +13,24 @@ import (
 // GatherTypes traverses the given parse tree and gathers all class, method, field, etc. declarations.
 // TODO doesn't get visibility of any types.
 func GatherTypes(fileURI string, fileVersion int, tree antlr.Tree, builtins *typ.TypeMap) (*typ.TypeMap, *DefinitionsUsagesLookup) {
-	visitor := newTypeGatherer(fileURI, fileVersion, builtins)
+	userTypes := typ.NewTypeMap()
+	defUsages := NewDefinitionsUsagesLookup()
 
-	// First pass: just get types (no fields/methods yet, since those will reference the types)
+	GatherTypesFirstPass(fileURI, fileVersion, tree, builtins, userTypes, defUsages)
+	GatherTypesSecondPass(fileURI, fileVersion, tree, builtins, userTypes, defUsages)
+
+	return userTypes, defUsages
+}
+
+func GatherTypesFirstPass(fileURI string, fileVersion int, tree antlr.Tree, builtins *typ.TypeMap, userTypes *typ.TypeMap, defUsages *DefinitionsUsagesLookup) {
+	visitor := newTypeGatherer(fileURI, fileVersion, builtins, userTypes, defUsages)
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
+}
 
-	// Second pass: populate fields/methods on every type
+func GatherTypesSecondPass(fileURI string, fileVersion int, tree antlr.Tree, builtins *typ.TypeMap, userTypes *typ.TypeMap, defUsages *DefinitionsUsagesLookup) {
+	visitor := newTypeGatherer(fileURI, fileVersion, builtins, userTypes, defUsages)
 	visitor.setSecondPass()
 	antlr.ParseTreeWalkerDefault.Walk(visitor, tree)
-
-	return visitor.types, visitor.defUsages
 }
 
 type formalParametersCtx interface {
@@ -39,7 +47,7 @@ type typeGatherer struct {
 	javaparser.BaseJavaParserListener
 	scopeTracker          *parse.ScopeTracker
 	builtins              *typ.TypeMap
-	types                 *typ.TypeMap
+	userTypes             *typ.TypeMap
 	defUsages             *DefinitionsUsagesLookup
 	currFileURI           string
 	currFileVersion       int
@@ -48,13 +56,13 @@ type typeGatherer struct {
 	currentMemberIsStatic bool
 }
 
-func newTypeGatherer(fileURI string, fileVersion int, builtins *typ.TypeMap) *typeGatherer {
+func newTypeGatherer(fileURI string, fileVersion int, builtins *typ.TypeMap, userTypes *typ.TypeMap, defUsages *DefinitionsUsagesLookup) *typeGatherer {
 	return &typeGatherer{
 		BaseJavaParserListener: javaparser.BaseJavaParserListener{},
 		scopeTracker:           parse.NewScopeTracker(),
 		builtins:               builtins,
-		types:                  typ.NewTypeMap(),
-		defUsages:              NewDefinitionsUsagesLookup(),
+		userTypes:              userTypes,
+		defUsages:              defUsages,
 		currFileURI:            fileURI,
 		currFileVersion:        fileVersion,
 		currPackageName:        "",
@@ -160,7 +168,7 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 	}
 
 	currTypeName := tg.scopeTracker.ScopeStack.Top().Name
-	currType := tg.types.Get(currTypeName)
+	currType := tg.userTypes.Get(currTypeName)
 
 	fieldTypeName := ctx.TypeType().GetText()
 	fieldType := tg.lookupType(fieldTypeName)
@@ -196,7 +204,7 @@ func (tg *typeGatherer) EnterFieldDeclaration(ctx *javaparser.FieldDeclarationCo
 func (tg *typeGatherer) addNewTypeFromScope(scope *parse.Scope, ttype typ.JavaTypeType) {
 	location := tg.makeCodeLocation(scope.Bounds)
 	newType := typ.NewJavaType(scope.Name, tg.currPackageName, typ.VisibilityPublic, ttype, &location)
-	tg.types.Add(newType)
+	tg.userTypes.Add(newType)
 	tg.defUsages.Add(location, newType, false)
 }
 
@@ -267,7 +275,7 @@ func (tg *typeGatherer) getImplementsTypes(ctx antlr.ParserRuleContext) []*typ.J
 func (tg *typeGatherer) addNewConstructorFromScope(ctx formalParametersCtx) {
 	// The top is the current scope, so we use top minus 1 to get the enclosing class
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
-	currType := tg.types.Get(currTypeName)
+	currType := tg.userTypes.Get(currTypeName)
 
 	location := tg.makeCodeLocation(loc.ParserRuleContextToBounds(ctx.Identifier()))
 	newConstructor := &typ.JavaConstructor{
@@ -286,7 +294,7 @@ func (tg *typeGatherer) addNewConstructorFromScope(ctx formalParametersCtx) {
 func (tg *typeGatherer) addNewMethodFromScope(scope *parse.Scope, ctx methodCtx) {
 	// The top is the current scope, so we use top minus 1 to get the enclosing class
 	currTypeName := tg.scopeTracker.ScopeStack.TopMinus(1).Name
-	currType := tg.types.Get(currTypeName)
+	currType := tg.userTypes.Get(currTypeName)
 
 	location := tg.makeCodeLocation(loc.ParserRuleContextToBounds(ctx.Identifier()))
 	method := &typ.JavaMethod{
@@ -359,7 +367,7 @@ func (tg *typeGatherer) getArgsFromContext(ctx formalParametersCtx) []*typ.JavaP
 }
 
 func (tg *typeGatherer) lookupType(typeName string) *typ.JavaType {
-	userType := tg.types.Get(typeName)
+	userType := tg.userTypes.Get(typeName)
 	if userType != nil {
 		return userType
 	}

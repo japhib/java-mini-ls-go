@@ -3,7 +3,11 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/antlr/antlr4/runtime/Go/antlr"
+	"go.lsp.dev/jsonrpc2"
+	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
+	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 	"java-mini-ls-go/parse"
 	"java-mini-ls-go/parse/loc"
@@ -11,10 +15,6 @@ import (
 	"java-mini-ls-go/parse/typ"
 	"java-mini-ls-go/parse/typecheck"
 	"java-mini-ls-go/util"
-
-	"go.lsp.dev/jsonrpc2"
-	"go.lsp.dev/protocol"
-	"go.uber.org/zap"
 )
 
 // Runtime check to ensure JavaLS implements interface
@@ -30,6 +30,7 @@ type JavaLS struct {
 	scopes            *util.SyncMap[string, *typecheck.TypeCheckingScope]
 	defUsages         *util.SyncMap[string, *typecheck.DefinitionsUsagesLookup]
 	builtinTypes      *typ.TypeMap
+	userTypes         *typ.TypeMap
 
 	// Dependencies that can be mocked for testing
 	diagnosticsPublisher DiagnosticsPublisher
@@ -48,6 +49,7 @@ func NewServer(ctx context.Context, logger *zap.Logger) *JavaLS {
 		scopes:               util.NewSyncMap[string, *typecheck.TypeCheckingScope](),
 		defUsages:            util.NewSyncMap[string, *typecheck.DefinitionsUsagesLookup](),
 		builtinTypes:         typ.NewTypeMap(),
+		userTypes:            typ.NewTypeMap(),
 		diagnosticsPublisher: &RealDiagnosticsPublisher{},
 		ReadStdlibTypes:      false,
 	}
@@ -99,7 +101,9 @@ func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams
 	}, nil
 }
 
-func (j *JavaLS) Initialized(_ context.Context, params *protocol.InitializedParams) error {
+func (j *JavaLS) Initialized(ctx context.Context, params *protocol.InitializedParams) error {
+	go j.rescanEverything(ctx)
+
 	j.log.Info("Initialized")
 	return nil
 }
@@ -114,7 +118,10 @@ func (j *JavaLS) Exit(_ context.Context) error {
 
 func (j *JavaLS) DidOpen(_ context.Context, params *protocol.DidOpenTextDocumentParams) error {
 	j.log.Info(fmt.Sprintf("DidOpen %s", params.TextDocument.URI))
-	j.parseTextDocument(params.TextDocument)
+
+	parsed := j.parseTextDocument(params.TextDocument)
+	j.typeCheckDocument(params.TextDocument, parsed)
+
 	return nil
 }
 
@@ -126,11 +133,14 @@ func (j *JavaLS) DidChange(_ context.Context, params *protocol.DidChangeTextDocu
 		Text:       params.ContentChanges[0].Text,
 		LanguageID: "java",
 	}
-	j.parseTextDocument(item)
+
+	parsed := j.parseTextDocument(item)
+	j.typeCheckDocument(item, parsed)
+
 	return nil
 }
 
-func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
+func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) antlr.Tree {
 	uriString := string(textDocument.URI)
 	j.documentTextCache.Set(uriString, textDocument)
 
@@ -139,17 +149,37 @@ func (j *JavaLS) parseTextDocument(textDocument protocol.TextDocumentItem) {
 	symbols := sym.FindSymbols(parsed)
 	j.symbols.Set(uriString, symbols)
 
-	typeCheckingResult := typecheck.CheckTypes(j.log, uriString, int(textDocument.Version), parsed, j.builtinTypes)
+	j.diagnosticsPublisher.PublishDiagnostics(
+		j,
+		textDocument,
+		util.Map(syntaxErrors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
+	)
+
+	return parsed
+}
+
+func (j *JavaLS) typeCheckDocument(textDocument protocol.TextDocumentItem, parsed antlr.Tree) {
+	uriString := string(textDocument.URI)
+
+	defUsages := typecheck.NewDefinitionsUsagesLookup()
+	typecheck.GatherTypesFirstPass(uriString, int(textDocument.Version), parsed, j.builtinTypes, j.userTypes, defUsages)
+	typecheck.GatherTypesSecondPass(uriString, int(textDocument.Version), parsed, j.builtinTypes, j.userTypes, defUsages)
+	typeCheckingResult := typecheck.CheckTypes(j.log, uriString, int(textDocument.Version), parsed, j.builtinTypes, j.userTypes, defUsages)
+	j.handleTypeCheckResult(textDocument, typeCheckingResult)
+}
+
+func (j *JavaLS) handleTypeCheckResult(textDocument protocol.TextDocumentItem, typeCheckingResult typecheck.TypeCheckResult) {
+	uriString := string(textDocument.URI)
 	j.scopes.Set(uriString, typeCheckingResult.RootScope)
 	j.defUsages.Set(uriString, typeCheckingResult.DefUsagesLookup)
 
 	typeErrors := typeCheckingResult.TypeErrors
-	diagnostics := util.CombineSlices(
-		util.Map(syntaxErrors, func(se parse.SyntaxError) protocol.Diagnostic { return se.ToDiagnostic() }),
+
+	j.diagnosticsPublisher.PublishDiagnostics(
+		j,
+		textDocument,
 		util.Map(typeErrors, func(se typecheck.TypeError) protocol.Diagnostic { return se.ToDiagnostic() }),
 	)
-
-	j.diagnosticsPublisher.PublishDiagnostics(j, textDocument, diagnostics)
 }
 
 var symbolTypeMap = map[sym.CodeSymbolType]protocol.SymbolKind{

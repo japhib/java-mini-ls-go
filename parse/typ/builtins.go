@@ -17,7 +17,9 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+// TypeMap is a collection of currently loaded types
 type TypeMap struct {
+	sync.RWMutex
 	contents map[string]*JavaType
 }
 
@@ -26,18 +28,36 @@ func NewTypeMap() *TypeMap {
 }
 
 func (tm *TypeMap) Add(t *JavaType) {
+	tm.Lock()
+	defer tm.Unlock()
+
+	if existing, ok := tm.contents[t.FullName()]; ok {
+		// Merge existing usages into the current one
+		// TODO check for out-of-date ones
+		t.Usages = append(t.Usages, existing.Usages...)
+	}
+
 	tm.contents[t.FullName()] = t
 }
 
 func (tm *TypeMap) Get(s string) *JavaType {
+	tm.RLock()
+	defer tm.RUnlock()
+
 	return tm.contents[s]
 }
 
 func (tm *TypeMap) Size() int {
+	tm.RLock()
+	defer tm.RUnlock()
+
 	return len(tm.contents)
 }
 
 func (tm *TypeMap) AllTypes() []*JavaType {
+	tm.RLock()
+	defer tm.RUnlock()
+
 	ret := make([]*JavaType, 0, len(tm.contents))
 	for _, v := range tm.contents {
 		ret = append(ret, v)
