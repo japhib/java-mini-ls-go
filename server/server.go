@@ -34,6 +34,7 @@ type JavaLS struct {
 
 	// Dependencies that can be mocked for testing
 	diagnosticsPublisher DiagnosticsPublisher
+	fileResolver         FileResolver
 
 	// Options
 	ReadStdlibTypes bool
@@ -51,6 +52,7 @@ func NewServer(ctx context.Context, logger *zap.Logger) *JavaLS {
 		builtinTypes:         typ.NewTypeMap(),
 		userTypes:            typ.NewTypeMap(),
 		diagnosticsPublisher: &RealDiagnosticsPublisher{},
+		fileResolver:         &RealFileResolver{},
 		ReadStdlibTypes:      false,
 	}
 }
@@ -101,8 +103,8 @@ func (j *JavaLS) Initialize(_ context.Context, params *protocol.InitializeParams
 	}, nil
 }
 
-func (j *JavaLS) Initialized(ctx context.Context, params *protocol.InitializedParams) error {
-	go j.rescanEverything(ctx)
+func (j *JavaLS) Initialized(ctx context.Context, _ *protocol.InitializedParams) error {
+	j.rescanEverything(ctx)
 
 	j.log.Info("Initialized")
 	return nil
@@ -137,6 +139,10 @@ func (j *JavaLS) DidChange(_ context.Context, params *protocol.DidChangeTextDocu
 	parsed := j.parseTextDocument(item)
 	j.typeCheckDocument(item, parsed)
 
+	return nil
+}
+
+func (j *JavaLS) DidClose(_ context.Context, _ *protocol.DidCloseTextDocumentParams) error {
 	return nil
 }
 

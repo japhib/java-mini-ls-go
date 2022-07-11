@@ -7,11 +7,8 @@ import (
 	"github.com/pkg/errors"
 	"go.lsp.dev/protocol"
 	"go.lsp.dev/uri"
-	"io/ioutil"
 	"java-mini-ls-go/parse/typecheck"
 	"java-mini-ls-go/util"
-	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -26,6 +23,7 @@ func (j *JavaLS) rescanEverything(ctx context.Context) {
 	}
 
 	for _, folder := range folders {
+		// TODO scan workspace folders in parallel
 		err = j.rescanWorkspaceFolder(folder.URI)
 		if err != nil {
 			j.log.Error(fmt.Sprintf("error scanning workspace folder. Folder=`%s` Error=`%s`", folder.URI, err.Error()))
@@ -39,12 +37,12 @@ type textDocParsed struct {
 }
 
 func (j *JavaLS) rescanWorkspaceFolder(folderURI string) error {
-	folderPath, err := util.FileURIToPath(folderURI)
+	folderPath, err := j.fileResolver.FileURIToPath(folderURI)
 	if err != nil {
 		return errors.Wrapf(err, "error converting file URI %s to path", folderURI)
 	}
 
-	allFiles, err := listJavaFilesRecursive(folderPath)
+	allFiles, err := j.fileResolver.ListJavaFilesRecursive(folderPath)
 	if err != nil {
 		return errors.Wrapf(err, "error scanning path %s for files", folderPath)
 	}
@@ -56,7 +54,7 @@ func (j *JavaLS) rescanWorkspaceFolder(folderURI string) error {
 			LanguageID: "java",
 			// TODO: make sure version 0 is okay to use
 			Version: 0,
-			Text:    j.readFile(filePath),
+			Text:    j.fileResolver.ReadFile(filePath),
 		}
 	})
 
@@ -109,43 +107,4 @@ func (j *JavaLS) rescanWorkspaceFolder(folderURI string) error {
 	})
 
 	return nil
-}
-
-func listJavaFilesRecursive(filePath string) ([]string, error) {
-	results, err := ioutil.ReadDir(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	var ret []string
-	for _, f := range results {
-		if f.IsDir() {
-			// Skip hidden folders like .git
-			if strings.HasPrefix(f.Name(), ".") {
-				continue
-			}
-
-			subDir := filepath.Join(filePath, f.Name())
-			subDirContents, err := listJavaFilesRecursive(subDir)
-			if err != nil {
-				return nil, err
-			}
-			ret = append(ret, subDirContents...)
-		} else if strings.HasSuffix(f.Name(), ".java") {
-			ret = append(ret, filepath.Join(filePath, f.Name()))
-		}
-	}
-
-	return ret, nil
-}
-
-func (j *JavaLS) readFile(filePath string) string {
-	ret, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		err = errors.Wrapf(err, "error reading file at %s", filePath)
-		j.log.Error(err.Error())
-		return ""
-	}
-
-	return string(ret)
 }

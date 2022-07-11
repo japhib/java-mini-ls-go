@@ -12,6 +12,8 @@ type DiagnosticsPublisher interface {
 
 type RealDiagnosticsPublisher struct{}
 
+var _ DiagnosticsPublisher = (*RealDiagnosticsPublisher)(nil)
+
 func (rdp *RealDiagnosticsPublisher) PublishDiagnostics(j *JavaLS, textDocument protocol.TextDocumentItem, diagnostics []protocol.Diagnostic) {
 	// publish diagnostics in a separate goroutine
 	go func(diagnostics []protocol.Diagnostic) {

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"github.com/golang/mock/gomock"
 	"java-mini-ls-go/util"
 	"testing"
 	"time"
@@ -16,32 +17,39 @@ func testCtx() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 5*time.Second)
 }
 
-type publishDiagnosticsCall struct {
-	textDocument protocol.TextDocumentItem
-	errors       []protocol.Diagnostic
-}
-
-type mockDiagnosticsPublisher struct {
-	publishDiagnosticsCalls []publishDiagnosticsCall
-}
-
-func (mdp *mockDiagnosticsPublisher) PublishDiagnostics(_ *JavaLS, textDocument protocol.TextDocumentItem, errors []protocol.Diagnostic) {
-	mdp.publishDiagnosticsCalls = append(mdp.publishDiagnosticsCalls, publishDiagnosticsCall{
-		textDocument: textDocument,
-		errors:       errors,
-	})
-}
-
-func testServer(t *testing.T, ctx context.Context) *JavaLS {
+func testServer(t *testing.T, ctx context.Context) (*JavaLS, *gomock.Controller) {
 	jls := NewServer(ctx, zaptest.NewLogger(t))
-	jls.diagnosticsPublisher = &mockDiagnosticsPublisher{
-		publishDiagnosticsCalls: []publishDiagnosticsCall{},
-	}
 
+	// Set up mocks
+	ctrl := gomock.NewController(t)
+
+	mdp := NewMockDiagnosticsPublisher(ctrl)
+	jls.diagnosticsPublisher = mdp
+	mdp.
+		EXPECT().
+		PublishDiagnostics(gomock.Any(), gomock.Any(), gomock.Any()).
+		AnyTimes()
+
+	fr := NewMockFileResolver(ctrl)
+	jls.fileResolver = fr
+	fr.
+		EXPECT().
+		FileURIToPath(gomock.Any()).
+		DoAndReturn(func(fileUri string) (string, error) {
+			return fileUri, nil
+		}).
+		AnyTimes()
+	fr.
+		EXPECT().
+		ListJavaFilesRecursive(gomock.Any()).
+		Return([]string{}, nil).
+		AnyTimes()
+
+	// Init server
 	_, err := jls.Initialize(ctx, &protocol.InitializeParams{})
 	assert.Nil(t, err)
 
-	return jls
+	return jls, ctrl
 }
 
 func createTextDocument(uriStr string, contents string) protocol.TextDocumentItem {
@@ -104,7 +112,7 @@ func oneLineRange(line uint32, startCol uint32, endCol uint32) protocol.Range {
 func TestServer_DidOpen(t *testing.T) {
 	ctx, cancel := testCtx()
 	defer cancel()
-	jls := testServer(t, ctx)
+	jls, _ := testServer(t, ctx)
 
 	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: createTextDocument("test_location", testFileText),
@@ -115,7 +123,7 @@ func TestServer_DidOpen(t *testing.T) {
 func TestServer_Symbols(t *testing.T) {
 	ctx, cancel := testCtx()
 	defer cancel()
-	jls := testServer(t, ctx)
+	jls, _ := testServer(t, ctx)
 
 	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: createTextDocument("test_location", testFileText),
@@ -191,7 +199,7 @@ import somepkg.nestedpkg.Nibble;`
 func TestServer_getTextOnLine(t *testing.T) {
 	ctx, cancel := testCtx()
 	defer cancel()
-	jls := testServer(t, ctx)
+	jls, _ := testServer(t, ctx)
 
 	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: createTextDocument("test_location", shortTestFileText),
@@ -217,7 +225,7 @@ func TestServer_getTextOnLine(t *testing.T) {
 func TestServer_Hover(t *testing.T) {
 	ctx, cancel := testCtx()
 	defer cancel()
-	jls := testServer(t, ctx)
+	jls, _ := testServer(t, ctx)
 
 	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: createTextDocument("test_location", testFileText),
@@ -257,7 +265,7 @@ const localTestFileText = `public class Main {
 func TestServer_References(t *testing.T) {
 	ctx, cancel := testCtx()
 	defer cancel()
-	jls := testServer(t, ctx)
+	jls, _ := testServer(t, ctx)
 
 	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: createTextDocument("test_location", localTestFileText),
@@ -297,7 +305,7 @@ func TestServer_References(t *testing.T) {
 func TestServer_Definition(t *testing.T) {
 	ctx, cancel := testCtx()
 	defer cancel()
-	jls := testServer(t, ctx)
+	jls, _ := testServer(t, ctx)
 
 	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: createTextDocument("test_location", localTestFileText),
@@ -345,7 +353,7 @@ const localTestFileText2 = `public class Main {
 func TestServer_MultipleUsagesAndDef(t *testing.T) {
 	ctx, cancel := testCtx()
 	defer cancel()
-	jls := testServer(t, ctx)
+	jls, _ := testServer(t, ctx)
 
 	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: createTextDocument("test_location", localTestFileText2),
@@ -456,7 +464,7 @@ func TestServer_MultipleUsagesAndDef(t *testing.T) {
 func TestServer_Completion(t *testing.T) {
 	ctx, cancel := testCtx()
 	defer cancel()
-	jls := testServer(t, ctx)
+	jls, _ := testServer(t, ctx)
 
 	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: createTextDocument("test_location", `public class Main {
@@ -488,7 +496,7 @@ func TestServer_Completion(t *testing.T) {
 func TestServer_Completion_Dot(t *testing.T) {
 	ctx, cancel := testCtx()
 	defer cancel()
-	jls := testServer(t, ctx)
+	jls, _ := testServer(t, ctx)
 
 	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: createTextDocument("test_location", `public class Main {
@@ -526,7 +534,7 @@ func TestServer_Completion_Dot(t *testing.T) {
 func TestServer_Completion_DotIsLast(t *testing.T) {
 	ctx, cancel := testCtx()
 	defer cancel()
-	jls := testServer(t, ctx)
+	jls, _ := testServer(t, ctx)
 
 	err := jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
 		TextDocument: createTextDocument("test_location", `public class Main {
@@ -559,4 +567,164 @@ func TestServer_Completion_DotIsLast(t *testing.T) {
 		}
 	}
 	assert.True(t, foundOut)
+}
+
+func TestServer_ParseFilesOnStartup(t *testing.T) {
+	ctx, cancel := testCtx()
+	defer cancel()
+	jls, ctrl := testServer(t, ctx)
+
+	mdp := NewMockDiagnosticsPublisher(ctrl)
+	jls.diagnosticsPublisher = mdp
+	mdp.
+		EXPECT().
+		// Expect empty diagnostics list
+		PublishDiagnostics(gomock.Any(), gomock.Any(), gomock.Eq([]protocol.Diagnostic{})).
+		AnyTimes()
+
+	mockClient := NewMockClient(ctrl)
+	jls.client = mockClient
+	mockClient.
+		EXPECT().
+		WorkspaceFolders(gomock.Any()).
+		Return([]protocol.WorkspaceFolder{
+			{
+				URI:  "test_workspace_folder",
+				Name: "test_workspace_folder",
+			},
+		}, nil).
+		Times(1)
+
+	fr := NewMockFileResolver(ctrl)
+	jls.fileResolver = fr
+	fr.
+		EXPECT().
+		FileURIToPath(gomock.Any()).
+		DoAndReturn(func(fileUri string) (string, error) {
+			return fileUri, nil
+		}).
+		AnyTimes()
+	fr.
+		EXPECT().
+		ListJavaFilesRecursive(gomock.Eq("test_workspace_folder")).
+		Return([]string{
+			"abc.java",
+			"def.java",
+		}, nil).
+		Times(1)
+	fr.
+		EXPECT().
+		ReadFile(gomock.Eq("abc.java")).
+		Return(`
+public class Abc {
+	public int a;
+
+	public void DoAbc() {}
+
+	public static void callDef() {
+		var def = new Def();
+		def.DoDef();
+	}
+}`).Times(1)
+
+	fr.
+		EXPECT().
+		ReadFile(gomock.Eq("def.java")).
+		Return(`
+public class Def {
+	public int d;
+
+	public String DoDef() {
+		return "def";
+	}
+}`).Times(1)
+
+	err := jls.Initialized(ctx, nil)
+	assert.Nil(t, err)
+
+	err = jls.DidOpen(ctx, &protocol.DidOpenTextDocumentParams{
+		TextDocument: createTextDocument("main.java", `public class Main {
+	public void main() {
+		var abc = new Abc();
+		int b = abc.a;
+		abc.DoAbc();
+		
+		var def = new Def();
+		int e = def.d;
+		String s = def.DoDef();
+	}
+}`)})
+	assert.Nil(t, err)
+
+	// Get definition of `abc.a`
+	defResult, err := jls.Definition(ctx, &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: uri.New("main.java"),
+			},
+			Position: protocol.Position{
+				Line:      3,
+				Character: 14,
+			},
+		},
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, []protocol.Location{
+		{
+			URI: uri.New("abc.java"),
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      2,
+					Character: 12,
+				},
+				End: protocol.Position{
+					Line:      2,
+					Character: 13,
+				},
+			},
+		},
+	}, defResult)
+
+	// Get usages of `def.DoDef()`
+	refResult, err := jls.References(ctx, &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: uri.New("def.java"),
+			},
+			Position: protocol.Position{
+				Line:      4,
+				Character: 16,
+			},
+		},
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, []protocol.Location{
+		{
+			URI: uri.New("abc.java"),
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      8,
+					Character: 6,
+				},
+				End: protocol.Position{
+					Line:      8,
+					Character: 11,
+				},
+			},
+		},
+		{
+			URI: uri.New("main.java"),
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      8,
+					Character: 17,
+				},
+				End: protocol.Position{
+					Line:      8,
+					Character: 22,
+				},
+			},
+		},
+	}, refResult)
+
 }

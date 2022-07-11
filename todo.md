@@ -3,6 +3,7 @@
 - Automatically parse all files in project on startup
   - Why isn't go-to-definition working between files?
   - Add some unit tests around this - refactor the file loading into an interface
+- Auto-completion for stdlib java.lang types -- String etc
 - go-to-definition for import statements
 
 later:

@@ -11,21 +11,27 @@ For example, instead of each local instance of the language server having a full
 the data structures representing the Java stdlib, what if that was instead managed by a central stdlib 
 server? This has the potential to even further reduce memory usage and startup time.
 
-## Features implemented
+## Features Highlight
+
+- Less than 50 MB memory usage!
+
+![17.4 MB memory usage](https://github.com/japhib/java-mini-ls-go/blob/master/img/memory-usage.png?raw=true)
 
 - Document symbols
-- Syntax errors
+
+![document symbols](https://github.com/japhib/java-mini-ls-go/blob/master/img/symbols.gif?raw=true)
+
+- Syntax errors and type errors
+
+![type errors](https://github.com/japhib/java-mini-ls-go/blob/master/img/errors.png?raw=true)
+
 - Shows local variable type on hover
 
-## Features planned for proof-of-concept
+![type on hover](https://github.com/japhib/java-mini-ls-go/blob/master/img/hovertype.gif?raw=true)
 
-- Type checking (no generics though)
-- Handle array/varargs parameters
-- Go to definition (for user-defined stuff only)
-- Find references (for user-defined stuff only)
-- Automatically parse all files in project on startup
-- Show docs on hover for stdlib classes/methods
-- Show signature on hover for user-defined classes/methods
+- Go to definition and find references
+
+![definitions/usages](https://github.com/japhib/java-mini-ls-go/blob/master/img/defUsages.gif?raw=true)
 
 ## Limitations
 

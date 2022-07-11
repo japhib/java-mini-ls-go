@@ -52,15 +52,13 @@ func (j *JavaLS) DidChangeWatchedFiles(ctx context.Context, params *protocol.Did
 }
 
 func (j *JavaLS) DidChangeWorkspaceFolders(ctx context.Context, params *protocol.DidChangeWorkspaceFoldersParams) error {
-	panic("DidChangeWorkspaceFolders unimplemented")
-}
-
-func (j *JavaLS) DidClose(ctx context.Context, params *protocol.DidCloseTextDocumentParams) error {
-	panic("DidClose unimplemented")
+	j.log.Info("DidChangeWorkspaceFolders unimplemented")
+	return nil
 }
 
 func (j *JavaLS) DidSave(ctx context.Context, params *protocol.DidSaveTextDocumentParams) error {
-	panic("DidSave unimplemented")
+	j.log.Info("DidSave unimplemented")
+	return nil
 }
 
 func (j *JavaLS) DocumentColor(ctx context.Context, params *protocol.DocumentColorParams) ([]protocol.ColorInformation, error) {

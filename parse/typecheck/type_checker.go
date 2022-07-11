@@ -557,6 +557,11 @@ func (tc *typeChecker) ExitCreator(ctx *javaparser.CreatorContext) {
 	// TODO handle multiple identifiers, e.g. `new OuterClass.InnerClass()`
 	identName := createdName.Identifier(0).GetText()
 
+	createdType := tc.lookupType(identName)
+	if createdType != nil {
+		tc.defUsages.Add(tc.makeCodeLocation(loc.ParserRuleContextToBounds(ctx)), createdType, true)
+	}
+
 	// TODO constructor resolution & type checking
 
 	tc.pushExprTypeName(identName, loc.ParserRuleContextToBounds(ctx))

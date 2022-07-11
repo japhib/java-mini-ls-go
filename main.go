@@ -22,6 +22,7 @@ func main() {
 	kingpin.Parse()
 
 	logConfig := zap.NewDevelopmentConfig()
+	logConfig.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 	logConfig.OutputPaths = []string{"stdout"}
 	logConfig.ErrorOutputPaths = []string{"stdout"}
 
